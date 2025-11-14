@@ -150,6 +150,18 @@ class MeepSimulation:
             print(f"  Detector {i+1} (y={y:+.2f}): {p:.6f}")
         
         return plt, power_distribution, y_positions
+
+    def get_power_distribution(self):
+        """Extract the power distribution along the output plane."""
+        power_distribution = []
+        y_positions = []
+        detector_height = self.cell_sy / self.num_detectors
+        for i, monitor in enumerate(self.flux_monitors):
+            power = mp.get_fluxes(monitor)[0]
+            power_distribution.append(power)
+            y_pos = -self.cell_sy/2 + (i + 0.5) * detector_height
+            y_positions.append(y_pos)
+        return power_distribution, y_positions
     
 if __name__ == "__main__":
     # Create simulation
@@ -166,7 +178,7 @@ if __name__ == "__main__":
     simulation.add_layer(layer_4)
     layer_5 = np.array([1, 0, 0, 1, 0, 1, 1, 0, 1, 1]).reshape(-1, 1)
     simulation.add_layer(layer_5)
-    
+
     # Setup simulation
     simulation.set_sources()
     simulation.set_simulation()
