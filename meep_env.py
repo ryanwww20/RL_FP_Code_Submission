@@ -12,7 +12,7 @@ BLOCK_SIZE_Y = 1
 WAVELENGTH = 1.55 # μm
 FREQUENCY = 1 / WAVELENGTH
 RESOLUTION = 20
-NUM_DETECTORS = 10
+NUM_DETECTORS = 100
 OUTPUT_PLANE_X = Cell_SX/2 - 1
 
 class MeepSimulation:
@@ -186,4 +186,8 @@ if __name__ == "__main__":
     
     simulation.power_distribution()
     plt.show()
+
+    power_distribution, y_positions = simulation.get_power_distribution()
+    print(f"power distribution: {power_distribution}")
+    print(f"y positions: {y_positions}")
     
