@@ -55,6 +55,7 @@ def eval(env, model, eval_episode_num):
             total_reward += np.mean(rewards)  # Extract reward from array
             print(f"rewards: {rewards}", end='\r')
 
+        env.cell_visualization()
         avg_score += total_reward
         # Placeholder - update if you add highest tracking
         avg_highest = max(avg_highest, total_reward)
