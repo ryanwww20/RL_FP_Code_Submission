@@ -118,9 +118,9 @@ class MeepSimulation(gym.Env):
         """
         # Create binary pattern first
         for i in range(self.state_size):
-            if i >= self.state_size / 8 and i <= self.state_size * 3 / 8:
+            if i >= self.state_size * 0.34 and i <= self.state_size * 0.42:
                 self.target_state[i] = 1
-            elif i >= self.state_size * 5 / 8 and i <= self.state_size * 7 / 8:
+            elif i >= self.state_size * 0.58 and i <= self.state_size * 0.66:
                 self.target_state[i] = 1
             else:
                 self.target_state[i] = 0
