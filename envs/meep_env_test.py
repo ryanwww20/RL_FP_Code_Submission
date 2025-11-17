@@ -24,11 +24,13 @@ ACTION_SIZE = int(BLOCK_NUM_Y)
 OUTPUT_PLANE_X = Cell_SX/2 - 1
 MATERIAL_INDEX_SILICON = 3.48
 
+
 class MeepSimulation(gym.Env):
     metadata = {
         "render_modes": ['ansi', 'human', 'rgb_array'],
         "render_fps": 2,
     }
+
     def __init__(self):
         super().__init__()
         self.cell_sx = Cell_SX
@@ -56,27 +58,29 @@ class MeepSimulation(gym.Env):
         self.material_index_silicon = MATERIAL_INDEX_SILICON
         # Set up sources first
         self.set_sources()
-        
+
         # Set up simulation (needs geometry and sources)
         self.set_simulation()
-        
+
         # Set up flux monitors (needs sim to exist)
         self.flux_monitors = []  # Initialize flux monitors list
         self.set_flux_monitors()
-        
+
         # Initialize target state
         self.target_state = np.zeros(STATE_SIZE, dtype=np.float32)
         self.set_target_state()
-        
-        #-----------------------gymnasium-----------------------------
+
+        # -----------------------gymnasium-----------------------------
         # Define action and observation spaces
         self.action_space = spaces.MultiBinary(n=ACTION_SIZE)
-        self.observation_space = spaces.Box(low=0, high=1, shape=(STATE_SIZE,), dtype=np.float32)
-        #-------------------------------------------------------------
+        self.observation_space = spaces.Box(
+            low=0, high=1, shape=(STATE_SIZE,), dtype=np.float32)
+        # -------------------------------------------------------------
 
     def set_simulation(self):
-        self.sim = mp.Simulation(cell_size=self.cell_size, boundary_layers=self.pml_layers, geometry=self.geometry, sources=self.sources, resolution=self.resolution)
-    
+        self.sim = mp.Simulation(cell_size=self.cell_size, boundary_layers=self.pml_layers,
+                                 geometry=self.geometry, sources=self.sources, resolution=self.resolution)
+
     def run_simulation(self, until=200):
         self.sim.run(until=until)
 
@@ -101,11 +105,12 @@ class MeepSimulation(gym.Env):
                 center=mp.Vector3(self.output_plane_x, y_pos),
                 size=mp.Vector3(0, detector_height)
             )
-            self.flux_monitors.append(self.sim.add_flux(self.frequency, 0, 1, flux_region))
+            self.flux_monitors.append(self.sim.add_flux(
+                self.frequency, 0, 1, flux_region))
 
     def set_target_state(self):
         """Set up the target power distribution pattern.
-        
+
         Creates a target distribution with two peaks:
         - First peak: detectors 12-37 (25% to 37.5% of range)
         - Second peak: detectors 62-87 (62.5% to 87.5% of range)
@@ -118,12 +123,7 @@ class MeepSimulation(gym.Env):
                 self.target_state[i] = 1
             else:
                 self.target_state[i] = 0
-        
-        # Normalize to sum to 1 (probability distribution) to match observation
-        total = np.sum(self.target_state)
-        if total > 0:
-            self.target_state = self.target_state / total
-    
+
     def add_layer(self, layer):
         if self.pattern.size == 0:
             self.pattern = layer
@@ -132,7 +132,7 @@ class MeepSimulation(gym.Env):
         # print(f"pattern: {self.pattern}")
         # print(f"pattern shape: {self.pattern.shape}")
         ny, nx = self.pattern.shape
-        for i in range(ny): # add layer x = (-self.sx/2 + 1) + (nx+0.5)*self.block_size_x
+        for i in range(ny):  # add layer x = (-self.sx/2 + 1) + (nx+0.5)*self.block_size_x
             if self.pattern[i, nx-1] == 1:
                 center_x = (-self.design_region_sx/2) + (nx+0.5)*self.block_size_x #(-4 + 1.5)
                 center_y = (self.design_region_sy/2) + (-i-0.5)*self.block_size_y #(-2 + )
@@ -202,29 +202,30 @@ class MeepSimulation(gym.Env):
         power_distribution = []
         y_positions = []
         detector_height = self.cell_sy / self.num_detectors
-        
+
         for i, monitor in enumerate(self.flux_monitors):
             power = mp.get_fluxes(monitor)[0]
             power_distribution.append(power)
             y_pos = -self.cell_sy/2 + (i + 0.5) * detector_height
             y_positions.append(y_pos)
-        
+
         # Plot power distribution
         plt.figure(figsize=(8, 6))
-        plt.plot(y_positions, power_distribution, 'o-', linewidth=2, markersize=8)
+        plt.plot(y_positions, power_distribution,
+                 'o-', linewidth=2, markersize=8)
         plt.xlabel('Y Position (μm)', fontsize=12)
         plt.ylabel('Power (au)', fontsize=12)
         plt.title('Power Distribution at Output Plane', fontsize=12)
         plt.grid(True, alpha=0.3)
         plt.tight_layout()
-        
+
         # Print results
         print("\n=== Power Distribution at Output Plane ===")
         print(f"Total transmitted power: {np.sum(power_distribution):.6f}")
         print("\nPower at each detector position:")
         for i, (y, p) in enumerate(zip(y_positions, power_distribution)):
             print(f"  Detector {i+1} (y={y:+.2f}): {p:.6f}")
-        
+
         return plt, power_distribution, y_positions
 
     def get_power_distribution(self):
@@ -247,17 +248,17 @@ class MeepSimulation(gym.Env):
     def reset(self, seed=None, options=None):
         """Reset the environment to initial state."""
         super().reset(seed=seed)
-        
+
         # Reset simulation state
         self.pattern = np.array([])
         self.geometry = []
         self.layer_num = 0
-        
+
         # Re-initialize simulation
         self.set_simulation()
         self.flux_monitors = []
         self.set_flux_monitors()
-        
+
         # Return initial observation (zero power distribution)
         initial_observation = np.zeros(STATE_SIZE, dtype=np.float32)
         return initial_observation, {}
@@ -266,32 +267,33 @@ class MeepSimulation(gym.Env):
         """Execute one step in the environment."""
         # Add the layer to the design
         self.add_layer(action.reshape(-1, 1))
-        
+
         # Run electromagnetic simulation
         self.simulation_reset()
-        
+
         print(f"pattern: {self.pattern}")
         self.run_simulation(until=200)
-        
+
         # Get power distribution as observation
         print(f"layer_num: {self.layer_num}")
         power_dist, _ = self.get_power_distribution()
-        power_array = np.array(power_dist, dtype=np.float32)
-        
-        # Normalize to [0, 1] range to match observation space
-        # Option 1: Normalize by total power (if total > 0)
-        total_power = np.sum(power_array)
-        if total_power > 0:
-            observation = power_array / total_power
+        observation = np.array(power_dist, dtype=np.float32)
+
+        # Normalize observation to [0, 1] to match observation_space bounds
+        power_min = np.min(observation)
+        power_max = np.max(observation)
+        if power_max > power_min:  # Avoid division by zero
+            observation = (observation - power_min) / (power_max - power_min)
         else:
-            observation = power_array  # All zeros if no power
-        
-        # Ensure observation is within [0, 1] bounds
-        observation = np.clip(observation, 0.0, 1.0)
-        
+            # If all values are the same, set to 0
+            observation = np.zeros_like(observation)
+
+        # Ensure observation is within [0, 1] bounds and correct dtype
+        observation = np.clip(observation, 0.0, 1.0).astype(np.float32)
+
         # Calculate reward (negative distance from target - minimize difference)
         reward = float(-np.sum(np.abs(observation - self.target_state)))
-        
+
         # Check if episode is done
         self.layer_num += 1
         if self.layer_num >= self.block_num_x:
@@ -300,14 +302,11 @@ class MeepSimulation(gym.Env):
         else:
             terminated = False
         truncated = False
-        info = {
-            'total_power': float(total_power),
-            'raw_power_dist': power_array.tolist()
-        }
-        
+        info = {}
+
         return observation, reward, terminated, truncated, info
 
-    
+
 if __name__ == "__main__":
     # Create simulation
     simulation = MeepSimulation()
@@ -330,15 +329,19 @@ if __name__ == "__main__":
     
     # Run simulation
     simulation.run_simulation(until=200)
-    
+
     # Visualize results
     simulation.cell_visualization()
     plt.show()
-    
+
     simulation.power_distribution()
     plt.show()
 
     power_distribution, y_positions = simulation.get_power_distribution()
     print(f"power distribution: {power_distribution}")
     print(f"y positions: {y_positions}")
-    
+
+'''
+target state:
+0000000000000111111111111111111111111100000000000000000000000001111111111111111111111111000000000000
+'''
