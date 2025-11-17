@@ -33,6 +33,7 @@ class MeepSimulation(gym.Env):
 
     def __init__(self):
         super().__init__()
+        mp.verbosity(0)
         self.cell_sx = Cell_SX
         self.cell_sy = Cell_SY
         self.design_region_sx = Design_Region_SX
