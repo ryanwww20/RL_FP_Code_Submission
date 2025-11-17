@@ -167,28 +167,34 @@ class MeepSimulation(gym.Env):
 
 
     def cell_visualization(self):
-        """Visualize the electric field distribution with coordinate markings."""
+        """Visualize both the permittivity map and field magnitude."""
         # Get field data
         eps_data = self.sim.get_array(center=mp.Vector3(), size=self.cell_size, component=mp.Dielectric)
         ez_data = self.sim.get_array(center=mp.Vector3(), size=self.cell_size, component=mp.Ez)
+        field_mag = np.abs(ez_data)
         
-        # Create visualization
-        plt.figure(figsize=(10,6))
-        plt.imshow(eps_data.transpose(), interpolation='spline36', cmap='binary',
-                   extent=[-self.cell_sx/2, self.cell_sx/2, -self.cell_sy/2, self.cell_sy/2], origin='lower')
-        plt.imshow(ez_data.transpose(), interpolation='spline36', cmap='RdBu', alpha=0.8,
-                   extent=[-self.cell_sx/2, self.cell_sx/2, -self.cell_sy/2, self.cell_sy/2], origin='lower')
-        plt.xlabel('X Position (μm)', fontsize=12)
-        plt.ylabel('Y Position (μm)', fontsize=12)
-        plt.title('Electric Field Distribution', fontsize=12)
-        plt.colorbar(label='Ez Field (au)', fraction=0.046, pad=0.04)
-        plt.axhline(y=0, color='white', linestyle='--', linewidth=0.5, alpha=0.5)
-        plt.axvline(x=0, color='white', linestyle='--', linewidth=0.5, alpha=0.5)
-        # Mark the output plane
-        plt.axvline(x=self.output_plane_x, color='yellow', linestyle='-', linewidth=2, label='Output Plane')
-        plt.legend(loc='upper left', fontsize=10)
-        plt.tight_layout()
-        return plt
+        extent = [-self.cell_sx/2, self.cell_sx/2, -self.cell_sy/2, self.cell_sy/2]
+        fig, axes = plt.subplots(1, 2, figsize=(12, 5), constrained_layout=True)
+        
+        perm_plot = axes[0].imshow(eps_data.transpose(), interpolation='spline36', cmap='viridis',
+                                   extent=extent, origin='lower')
+        axes[0].set_title('Permittivity slice')
+        axes[0].set_xlabel('X Position (μm)')
+        axes[0].set_ylabel('Y Position (μm)')
+        fig.colorbar(perm_plot, ax=axes[0], fraction=0.046, pad=0.04)
+        
+        field_plot = axes[1].imshow(field_mag.transpose(), interpolation='spline36', cmap='viridis',
+                                    extent=extent, origin='lower')
+        axes[1].set_title('Field magnitude slice')
+        axes[1].set_xlabel('X Position (μm)')
+        axes[1].set_ylabel('Y Position (μm)')
+        fig.colorbar(field_plot, ax=axes[1], fraction=0.046, pad=0.04)
+        
+        # Highlight output plane on both subplots
+        for ax in axes:
+            ax.axvline(x=self.output_plane_x, color='yellow', linestyle='-', linewidth=1.5)
+        
+        return fig
     
     def power_distribution(self):
         """Extract and plot the power distribution along the output plane."""
