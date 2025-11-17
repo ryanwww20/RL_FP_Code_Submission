@@ -56,6 +56,10 @@ class MeepSimulation(gym.Env):
         self.waveguide_width = WAVEGUIDE_WIDTH
         self.waveguide_length = (Cell_SX - Design_Region_SX) / 2
         self.waveguide_spacing = WAVEGUIDE_SPACING
+        self.output_waveguide1_center_x = self.cell_sx/2 - self.waveguide_length/2
+        self.output_waveguide2_center_x = self.cell_sx/2 - self.waveguide_length/2
+        self.output_waveguide1_center_y = -self.waveguide_spacing/2 - self.waveguide_width/2
+        self.output_waveguide2_center_y = self.waveguide_spacing/2 + self.waveguide_width/2
         self.material_index_silicon = MATERIAL_INDEX_SILICON
         # Set up sources first
         self.set_sources()
@@ -155,13 +159,13 @@ class MeepSimulation(gym.Env):
         self.geometry.append(waveguide)
         waveguide = mp.Block(
             material=mp.Medium(index=self.material_index_silicon),
-            center=mp.Vector3(self.cell_sx/2 - self.waveguide_length/2, self.waveguide_spacing/2 + self.waveguide_width/2),
+            center=mp.Vector3(self.output_waveguide2_center_x, self.output_waveguide2_center_y),
             size=mp.Vector3(self.waveguide_length, self.waveguide_width)
         )
         self.geometry.append(waveguide)
         waveguide = mp.Block(
             material=mp.Medium(index=self.material_index_silicon),
-            center=mp.Vector3(self.cell_sx/2 - self.waveguide_length/2, -self.waveguide_spacing/2 - self.waveguide_width/2),
+            center=mp.Vector3(self.output_waveguide1_center_x, self.output_waveguide1_center_y),
             size=mp.Vector3(self.waveguide_length, self.waveguide_width)
         )
         self.geometry.append(waveguide)
