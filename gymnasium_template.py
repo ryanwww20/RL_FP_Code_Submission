@@ -10,8 +10,9 @@ import matplotlib.pyplot as plt
 from datetime import datetime
 
 TARGET_FLUX = np.zeros(100)
-TARGET_FLUX[20:40] = 1.0
-TARGET_FLUX[60:80] = 1.0
+TARGET_FLUX[20:40] = 2.0
+TARGET_FLUX[60:80] = 2.0
+TARGET_FLUX -= 1.0
 
 
 class MinimalEnv(gym.Env):
@@ -71,7 +72,8 @@ class MinimalEnv(gym.Env):
         return observation, info
 
     def step(self, action):
-        print(f"Step {self.material_matrix_idx} with action: {action[:5]}")
+        print(
+            f"Step {self.material_matrix_idx} with action: {action[:5]}", end="\r")
         """
         Execute one step in the environment.
 
@@ -95,14 +97,15 @@ class MinimalEnv(gym.Env):
         output_flux = self.flux_calculator.calculate_flux(
             self.material_matrix, x_position=2.0)
 
-        reward = np.sum(output_flux * TARGET_FLUX)
+        reward = np.sum(output_flux * TARGET_FLUX)/np.sum(output_flux)
 
         # Check if episode is done
         terminated = self.material_matrix_idx >= 50  # Goal reached
         if terminated:
             # save reward to csv
-            with open('/Users/williamsu/Documents/ntu/lecture/31/RL/2025-09-RL/final_11_18/ppo_model_logs/rewards.csv', 'a') as f:
-                f.write(f'{reward}\n')
+            with open('/Users/williamsu/Documents/ntu/lecture/31/RL/2025-09-RL/final_11_18/ppo_model_logs/episode_rewards.csv', 'a') as f:
+                f.write(
+                    f'{datetime.now().strftime("%Y%m%d_%H%M%S")}, {reward}\n')
             # plot flux distribution of material matrix
             current_flux = self.flux_calculator.calculate_flux(
                 self.material_matrix, x_position=2.0
@@ -117,7 +120,7 @@ class MinimalEnv(gym.Env):
             plt.legend()
             plt.grid(True, alpha=0.3)
             plt.savefig(
-                f'/Users/williamsu/Documents/ntu/lecture/31/RL/2025-09-RL/final_11_18/ppo_model_logs/flux_distribution_{datetime.now().strftime("%Y%m%d_%H%M%S")}.png')
+                f'/Users/williamsu/Documents/ntu/lecture/31/RL/2025-09-RL/final_11_18/ppo_model_logs/flux_images/flux_distribution_{datetime.now().strftime("%Y%m%d_%H%M%S")}.png')
             plt.close()
         truncated = False   # Time limit exceeded
 

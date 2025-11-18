@@ -1,10 +1,13 @@
-# plot the training progress of the rewards.csv
-import pandas as pd
-import matplotlib.pyplot as plt
+# load ppo_model_copy.zip and test the model
+from stable_baselines3 import PPO
+from stable_baselines3.common.env_util import make_vec_env
+from gymnasium_template import MinimalEnv
 
-# read the rewards.csv
-rewards = pd.read_csv('ppo_model_logs/rewards.csv')
+# load the model
+model = PPO.load('ppo_model_copy.zip')
 
-# plot the rewards
-plt.plot(rewards['reward'])
-plt.show()
+# create the environment
+env = MinimalEnv()
+
+# test the model
+model.test(env)
