@@ -8,6 +8,7 @@ import numpy as np
 from meep_simulation import WaveguideSimulation
 import matplotlib.pyplot as plt
 from datetime import datetime
+from config import config
 
 TARGET_FLUX = np.zeros(100)
 TARGET_FLUX[20:40] = 2.0
@@ -33,12 +34,12 @@ class MinimalEnv(gym.Env):
         self.observation_space = spaces.Box(
             low=-np.inf,
             high=np.inf,
-            shape=(100,),
+            shape=(config.environment.obs_size,),
             dtype=np.float32
         )
 
         # Action space: binary array of length 50 (0/1 values)
-        self.action_space = spaces.MultiBinary(50)
+        self.action_space = spaces.MultiBinary(config.environment.action_size)
 
         # Initialize state
         self.state = None

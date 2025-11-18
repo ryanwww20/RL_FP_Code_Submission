@@ -66,8 +66,15 @@ class WaveguideSimulation:
         self.num_flux_regions = config.simulation.num_flux_regions
         self.simulation_time = config.simulation.simulation_time
         self.output_x = config.simulation.output_x
+        self.design_region_x = config.simulation.design_region_x
+        self.design_region_y = config.simulation.design_region_y
+        self.pixel_size = config.simulation.pixel_size
+        self.silicon_index = config.simulation.silicon_index
+        self.silica_index = config.simulation.silica_index
+        self.pixel_num_x = config.simulation.pixel_num_x
+        self.pixel_num_y = config.simulation.pixel_num_y
 
-    def create_geometry(self, material_matrix=None, silicon_index=3.5, silica_index=1.45):
+    def create_geometry(self, material_matrix=None):
         """
         Create waveguide geometry and add material distribution based on matrix
 
@@ -95,7 +102,7 @@ class WaveguideSimulation:
             material_matrix = np.array(material_matrix)
 
             # Check matrix dimensions
-            if material_matrix.shape != (50, 50):
+            if material_matrix.shape != (self.pixel_num_x, self.pixel_num_y):
                 raise ValueError(
                     f"material_matrix must be 50x50, got shape {material_matrix.shape}")
 
@@ -106,26 +113,27 @@ class WaveguideSimulation:
             square_y_max = 1.0  # Square y to +1um (symmetric)
 
             # Pixel size in square region
-            dx = (square_x_max - square_x_min) / \
-                50  # 2um / 50 = 0.04um per pixel
-            dy = (square_y_max - square_y_min) / \
-                50   # 2um / 50 = 0.04um per pixel
+            dx = self.pixel_size # 2um / 50 = 0.04um per pixel
+            dy = self.pixel_size  # 2um / 50 = 0.04um per pixel
 
             # Create blocks for each pixel based on matrix value
-            for i in range(50):
-                for j in range(50):
+            for i in range(self.pixel_num_x):
+                for j in range(self.pixel_num_y):
                     # i corresponds to x (0 to 49 maps to x from 0 to 2um)
                     # j corresponds to y (0 to 49 maps to y from -1 to +1um, symmetric)
                     # Map matrix indices to physical coordinates in square region
                     x_center = square_x_min + (i + 0.5) * dx
                     y_center = square_y_min + (j + 0.5) * dy
+                    
+                    if j == 49:
+                        print(f"x_center: {x_center}, y_center: {y_center}")
 
                     if material_matrix[i, j] == 1:
                         # Silicon pixel
                         silicon_pixel = mp.Block(
                             center=mp.Vector3(x_center, y_center, 0),
                             size=mp.Vector3(dx, dy, 0),
-                            material=mp.Medium(index=silicon_index)
+                            material=mp.Medium(index=self.silicon_index)
                         )
                         geometry.append(silicon_pixel)
                     elif material_matrix[i, j] == 0:
@@ -133,7 +141,7 @@ class WaveguideSimulation:
                         silica_pixel = mp.Block(
                             center=mp.Vector3(x_center, y_center, 0),
                             size=mp.Vector3(dx, dy, 0),
-                            material=mp.Medium(index=silica_index)
+                            material=mp.Medium(index=self.silica_index)
                         )
                         geometry.append(silica_pixel)
 

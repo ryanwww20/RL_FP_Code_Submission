@@ -13,7 +13,16 @@ class SimulationConfig:
     waveguide_index: float
     waveguide_center_x: float
     waveguide_length: float
-
+    simulation_time: float
+    num_flux_regions: int
+    output_x: float
+    design_region_x: float
+    design_region_y: float
+    pixel_size: float
+    silicon_index: float
+    silica_index: float
+    pixel_num_x: int
+    pixel_num_y: int
 @dataclass
 class EnvironmentConfig:
     obs_size: int
