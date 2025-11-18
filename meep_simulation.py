@@ -219,7 +219,7 @@ class WaveguideSimulation:
 
         return self.sim
 
-    def add_flux_monitor(self, x_position, height=None):
+    def add_flux_monitor(self, height=None):
         """
         Add flux monitor at a specific x position
 
@@ -239,7 +239,7 @@ class WaveguideSimulation:
 
         # Create flux region at x_position
         flux_region = mp.FluxRegion(
-            center=mp.Vector3(x_position, 0, 0),
+            center=mp.Vector3(self.output_x, 0, 0),
             size=mp.Vector3(0, height, 0)  # Vertical line at x_position
         )
 
@@ -327,7 +327,7 @@ class WaveguideSimulation:
 
         return y_positions, flux_values
 
-    def plot_flux_distribution_y(self, x_position, save_path=None, show_plot=True):
+    def plot_flux_distribution_y(self, save_path=None, show_plot=True):
         """
         Plot flux distribution along y-axis at a specific x position
 
@@ -341,16 +341,16 @@ class WaveguideSimulation:
         # Add timestamp to filename if not provided
         if save_path is None:
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            save_path = f'flux_distribution_x{x_position}_{timestamp}.png'
+            save_path = f'flux_distribution_x{self.output_x}_{timestamp}.png'
 
         # Create plot
         plt.figure(figsize=(10, 6))
         plt.plot(y_positions, flux_values, 'b-', linewidth=2,
-                 label=f'Flux at x = {x_position}')
+                 label=f'Flux at x = {self.output_x}')
         plt.axhline(y=0, color='k', linestyle='--', linewidth=1, alpha=0.5)
         plt.xlabel('y (microns)')
         plt.ylabel('Flux')
-        plt.title(f'Flux Distribution along Y-axis at x = {x_position}μm')
+        plt.title(f'Flux Distribution along Y-axis at x = {self.output_x}μm')
         plt.grid(True, alpha=0.3)
         plt.legend()
 
@@ -607,7 +607,7 @@ class WaveguideSimulation:
             flux_value = self.get_flux_value()
             print(f"\nFlux at x = {measure_flux_at_x}: {flux_value:.6e}")
     
-    def calculate_flux(self, material_matrix, x_position=2.0):
+    def calculate_flux(self, material_matrix):
         # Create simulation
 
         # Create geometry with material matrix
@@ -615,7 +615,7 @@ class WaveguideSimulation:
 
         # Create simulation and add flux monitors
         self.create_simulation()
-        self.add_flux_monitors_along_y(x_position)
+        self.add_flux_monitors_along_y()
 
         # Run simulation
         self.run()
@@ -634,7 +634,7 @@ if __name__ == "__main__":
     material_matrix[0:5, :] = 1  # Add silicon at x=0 to 0.2um
 
     calculator = WaveguideSimulation()
-    flux_array = calculator.calculate_flux(material_matrix, x_position=2.0)
+    flux_array = calculator.calculate_flux(material_matrix)
 
     print(f"Flux array shape: {flux_array.shape}")
     print(f"Total flux: {np.sum(flux_array):.6e}")
