@@ -23,7 +23,7 @@ class WaveguideSimulation:
     def __init__(self,
                  resolution=50,
                  wavelength=1.55,
-                 cell_size=mp.Vector3(4, 2, 0),
+                 cell_size=mp.Vector3(6, 2, 0),
                  pml_thickness=0.2,
                  waveguide_width=0.3,
                  waveguide_index=3.5,
@@ -62,6 +62,8 @@ class WaveguideSimulation:
         self.ez_data = None
         self.flux = None  # Single flux monitor object
         self.flux_regions = []  # List of flux monitors for y-axis distribution
+        self.num_flux_regions = 100
+        self.simulation_time = 30
 
     def create_geometry(self, material_matrix=None, silicon_index=3.5, silica_index=1.45):
         """
@@ -235,7 +237,7 @@ class WaveguideSimulation:
 
         return self.flux
 
-    def add_flux_monitors_along_y(self, x_position, num_regions=50, region_height=None):
+    def add_flux_monitors_along_y(self, x_position, region_height=None):
         """
         Add multiple flux monitors along y-axis at a specific x position
 
@@ -256,14 +258,14 @@ class WaveguideSimulation:
 
         # Determine region height
         if region_height is None:
-            region_height = self.cell_size.y / num_regions
+            region_height = self.cell_size.y / self.num_flux_regions
 
         # Calculate y positions for each region
         # y spans from -cell_size.y/2 to +cell_size.y/2
         y_min = -self.cell_size.y / 2
         y_max = self.cell_size.y / 2
         y_positions = np.linspace(
-            y_min + region_height/2, y_max - region_height/2, num_regions)
+            y_min + region_height/2, y_max - region_height/2, self.num_flux_regions)
 
         # Create flux monitors for each y position
         flux_monitors = []
@@ -379,14 +381,14 @@ class WaveguideSimulation:
 
         return flux_value
 
-    def run(self, until=30):
+    def run(self):
         """Run the simulation"""
         if self.sim is None:
             self.create_simulation()
         # Suppress Meep's verbose output during simulation run
         with open(os.devnull, 'w') as devnull:
             with redirect_stdout(devnull), redirect_stderr(devnull):
-                self.sim.run(until=until)
+                self.sim.run(until=self.simulation_time)
         # self.plot_results(save_path=None, show_plot=False)
         return self.sim
 
@@ -594,7 +596,6 @@ class WaveguideSimulation:
             flux_value = self.get_flux_value()
             print(f"\nFlux at x = {measure_flux_at_x}: {flux_value:.6e}")
 
-
 class FluxCalculator:
     """
     Simple interface for calculating flux from material matrix.
@@ -612,18 +613,7 @@ class FluxCalculator:
         flux_array = calculator.calculate_flux(material_matrix, x_position=2.0)
     """
 
-    def __init__(self,
-                 resolution=50,
-                 wavelength=1.55,
-                 cell_size=None,
-                 waveguide_width=0.3,
-                 waveguide_index=3.5,
-                 waveguide_center_x=-0.9,
-                 waveguide_length=1.8,
-                 silicon_index=3.5,
-                 silica_index=1.45,
-                 simulation_time=30,
-                 num_flux_regions=100):
+    def __init__(self):
         """
         Initialize flux calculator with simulation parameters.
 
@@ -640,20 +630,18 @@ class FluxCalculator:
             simulation_time: simulation time (default: 30)
             num_flux_regions: number of flux regions along y-axis (default: 100)
         """
-        if cell_size is None:
-            cell_size = mp.Vector3(6, 2, 0)
 
-        self.resolution = resolution
-        self.wavelength = wavelength
-        self.cell_size = cell_size
-        self.waveguide_width = waveguide_width
-        self.waveguide_index = waveguide_index
-        self.waveguide_center_x = waveguide_center_x
-        self.waveguide_length = waveguide_length
-        self.silicon_index = silicon_index
-        self.silica_index = silica_index
-        self.simulation_time = simulation_time
-        self.num_flux_regions = num_flux_regions
+        # self.resolution = resolution
+        # self.wavelength = wavelength
+        # self.cell_size = cell_size
+        # self.waveguide_width = waveguide_width
+        # self.waveguide_index = waveguide_index
+        # self.waveguide_center_x = waveguide_center_x
+        # self.waveguide_length = waveguide_length
+        # self.silicon_index = silicon_index
+        # self.silica_index = silica_index
+        # self.simulation_time = simulation_time
+        # self.num_flux_regions = num_flux_regions
 
     def calculate_flux(self, material_matrix, x_position=2.0):
         """
@@ -669,30 +657,17 @@ class FluxCalculator:
                        Shape: (num_flux_regions,)
         """
         # Create simulation
-        sim = WaveguideSimulation(
-            resolution=self.resolution,
-            wavelength=self.wavelength,
-            cell_size=self.cell_size,
-            waveguide_width=self.waveguide_width,
-            waveguide_index=self.waveguide_index,
-            waveguide_center_x=self.waveguide_center_x,
-            waveguide_length=self.waveguide_length
-        )
+        sim = WaveguideSimulation()
 
         # Create geometry with material matrix
-        sim.create_geometry(
-            material_matrix=material_matrix,
-            silicon_index=self.silicon_index,
-            silica_index=self.silica_index
-        )
+        sim.create_geometry(material_matrix=material_matrix)
 
         # Create simulation and add flux monitors
         sim.create_simulation()
-        sim.add_flux_monitors_along_y(
-            x_position, num_regions=self.num_flux_regions)
+        sim.add_flux_monitors_along_y(x_position)
 
         # Run simulation
-        sim.run(until=self.simulation_time)
+        sim.run()
 
         # Get flux distribution
         y_positions, flux_values = sim.get_flux_distribution_along_y()

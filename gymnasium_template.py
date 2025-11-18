@@ -124,7 +124,7 @@ class MinimalEnv(gym.Env):
     def reward_plot(self, reward, flux_data):
         # save reward to csv
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        with open('/Users/williamsu/Documents/ntu/lecture/31/RL/2025-09-RL/final_11_18/ppo_model_logs/episode_rewards.csv', 'a') as f:
+        with open('/Users/ryan/NTUEE_Local/114-1/RL_FinalPJ/RL_FinalProject/ppo_model_logs/episode_rewards.csv', 'a') as f:
             f.write(f'{timestamp}, {reward}\n')
 
         plt.figure(figsize=(10, 6))
@@ -137,7 +137,7 @@ class MinimalEnv(gym.Env):
         plt.legend()
         plt.grid(True, alpha=0.3)
         plt.savefig(
-            f'/Users/williamsu/Documents/ntu/lecture/31/RL/2025-09-RL/final_11_18/ppo_model_logs/flux_images/flux_distribution_{datetime.now().strftime("%Y%m%d_%H%M%S")}.png')
+            f'/Users/ryan/NTUEE_Local/114-1/RL_FinalPJ/RL_FinalProject/ppo_model_logs/flux_images/flux_distribution_{datetime.now().strftime("%Y%m%d_%H%M%S")}.png')
         plt.close()
 
     def field_result_plot(self, ez_data):
@@ -164,7 +164,7 @@ class MinimalEnv(gym.Env):
             plt.legend()
             plt.grid(True, alpha=0.3)
             plt.savefig(
-                f'/Users/williamsu/Documents/ntu/lecture/31/RL/2025-09-RL/final_11_18/ppo_model_logs/field_images/field_distribution_{datetime.now().strftime("%Y%m%d_%H%M%S")}.png')
+                f'/Users/ryan/NTUEE_Local/114-1/RL_FinalPJ/RL_FinalProject/ppo_model_logs/field_images/field_distribution_{datetime.now().strftime("%Y%m%d_%H%M%S")}.png')
             plt.close()
         except Exception as e:
             print(f'Error plotting field results: {e}')
