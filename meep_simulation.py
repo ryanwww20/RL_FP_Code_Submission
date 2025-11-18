@@ -13,6 +13,7 @@ from datetime import datetime
 import sys
 import os
 from contextlib import redirect_stdout, redirect_stderr
+from config import config
 
 SAVE_FIG = False
 
@@ -42,18 +43,18 @@ class WaveguideSimulation:
             waveguide_center_x: x-coordinate of waveguide center
             waveguide_length: length of waveguide in x-direction
         """
-        self.resolution = resolution
-        self.wavelength = wavelength
-        self.cell_size = cell_size
-        self.pml_layers = [mp.PML(pml_thickness)]
-        self.waveguide_width = waveguide_width
-        self.waveguide_index = waveguide_index
-        self.waveguide_center_x = waveguide_center_x
-        self.waveguide_length = waveguide_length
+        self.resolution = config.simulation.resolution
+        self.wavelength = config.simulation.wavelength
+        self.cell_size = config.simulation.cell_size
+        self.pml_layers = [mp.PML(config.simulation.pml_thickness)]
+        self.waveguide_width = config.simulation.waveguide_width
+        self.waveguide_index = config.simulation.waveguide_index
+        self.waveguide_center_x = config.simulation.waveguide_center_x
+        self.waveguide_length = config.simulation.waveguide_length
 
         # Calculate waveguide boundaries
-        self.waveguide_x_min = waveguide_center_x - waveguide_length / 2
-        self.waveguide_x_max = waveguide_center_x + waveguide_length / 2
+        self.waveguide_x_min = self.waveguide_center_x - self.waveguide_length / 2
+        self.waveguide_x_max = self.waveguide_center_x + self.waveguide_length / 2
 
         # Initialize simulation components
         self.geometry = None
@@ -62,8 +63,9 @@ class WaveguideSimulation:
         self.ez_data = None
         self.flux = None  # Single flux monitor object
         self.flux_regions = []  # List of flux monitors for y-axis distribution
-        self.num_flux_regions = 100
-        self.simulation_time = 30
+        self.num_flux_regions = config.simulation.num_flux_regions
+        self.simulation_time = config.simulation.simulation_time
+        self.output_x = config.simulation.output_x
 
     def create_geometry(self, material_matrix=None, silicon_index=3.5, silica_index=1.45):
         """
@@ -83,6 +85,7 @@ class WaveguideSimulation:
             size=mp.Vector3(self.waveguide_length, self.waveguide_width, 0),
             material=mp.Medium(index=self.waveguide_index)
         )
+
         geometry.append(waveguide)
 
         # Add material distribution from matrix
@@ -135,7 +138,7 @@ class WaveguideSimulation:
                         geometry.append(silica_pixel)
 
         self.geometry = geometry
-        return geometry
+        # return geometry
 
     def create_sources(self):
         """Create eigenmode source at left edge of waveguide"""
@@ -237,7 +240,7 @@ class WaveguideSimulation:
 
         return self.flux
 
-    def add_flux_monitors_along_y(self, x_position, region_height=None):
+    def add_flux_monitors_along_y(self, region_height=None):
         """
         Add multiple flux monitors along y-axis at a specific x position
 
@@ -271,7 +274,7 @@ class WaveguideSimulation:
         flux_monitors = []
         for y_pos in y_positions:
             flux_region = mp.FluxRegion(
-                center=mp.Vector3(x_position, y_pos, 0),
+                center=mp.Vector3(self.output_x, y_pos, 0),
                 size=mp.Vector3(0, region_height, 0)  # Small vertical segment
             )
             flux_monitor = self.sim.add_flux(frequency, 0, 1, flux_region)
