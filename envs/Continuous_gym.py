@@ -42,9 +42,10 @@ class MinimalEnv(gym.Env):
         )
 
         # Action space: binary array of length 50 (0/1 values)
+        index_diff = config.simulation.silicon_index - config.simulation.silica_index
         self.action_space = spaces.Box(
-            low=config.simulation.silica_index,
-            high=config.simulation.silicon_index,
+            low=config.simulation.silica_index - index_diff/2,
+            high=config.simulation.silicon_index + index_diff/2,
             shape=(self.action_size,),
             dtype=np.float32
         )

@@ -12,6 +12,11 @@ from matplotlib.patches import Rectangle
 from datetime import datetime
 import sys
 import os
+
+# Add the parent directory to sys.path if running directly
+if __name__ == "__main__":
+    sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 from contextlib import redirect_stdout, redirect_stderr
 from config import config
 
@@ -78,6 +83,7 @@ class WaveguideSimulation:
         self.silica_index = config.simulation.silica_index
         self.pixel_num_x = config.simulation.pixel_num_x
         self.pixel_num_y = config.simulation.pixel_num_y
+        self.src_pos_shift_coeff = config.simulation.src_pos_shift_coeff
 
     def create_geometry(self, material_matrix=None):
         """
@@ -288,7 +294,7 @@ class WaveguideSimulation:
                 width=20
             ),
             # Position source at the start of the input coupler
-            center=mp.Vector3(input_coupler_start_x, 0, 0), 
+            center=mp.Vector3(input_coupler_start_x * self.src_pos_shift_coeff, 0, 0), 
             size=mp.Vector3(0, self.waveguide_width, 0),
             eig_band=1,
             direction=mp.NO_DIRECTION,
@@ -714,7 +720,7 @@ class WaveguideSimulation:
         # Plot electric field
         # Transpose ez_data because imshow expects (rows, cols) where rows=y, cols=x
         # Meep's get_array gives (x, y), so transpose for correct orientation
-        plt.imshow(self.ez_data.transpose(), interpolation='spline36', cmap='RdBu',
+        plt.imshow(self.ez_data, interpolation='spline36', cmap='RdBu',
                 aspect='auto', extent=extent, origin='lower')
         plt.colorbar(label='Ez (electric field)')
         plt.xlabel('x (microns)')
@@ -902,7 +908,7 @@ if __name__ == "__main__":
     print("Plotting Centered Geometry (Design at x=[-1, 1])")
     calculator_A.plot_geometry(
         show_plot=False, 
-        save_path='geometry_plot.png', # Provide a file name here
+        save_path='img/geometry_plot.png', # Provide a file name here
         x_range=(-3.0, 3.0), 
         y_range=(-2, 2)
     )
@@ -918,7 +924,7 @@ if __name__ == "__main__":
     calculator_A.run()
     calculator_A.plot_results(
         show_plot=False,
-        save_path='simulation_ez_field.png' # Provide a file name here
+        save_path='img/simulation_ez_field.png' # Provide a file name here
     )
     
     # Get total flux
