@@ -9,6 +9,7 @@ from envs.meep_simulation import WaveguideSimulation
 import matplotlib.pyplot as plt
 from datetime import datetime
 from config import config
+import os
 
 TARGET_FLUX = np.zeros(100)
 TARGET_FLUX[20:40] = 2.0
@@ -50,6 +51,17 @@ class MinimalEnv(gym.Env):
         self.material_matrix_idx = 0
         self.max_steps = config.environment.max_steps
         self.simulation = WaveguideSimulation()
+
+        # Determine project root and log paths
+        # Assuming this file is in envs/ and project root is one level up
+        current_file_path = os.path.abspath(__file__)
+        self.project_root = os.path.dirname(os.path.dirname(current_file_path))
+        self.log_dir = os.path.join(self.project_root, 'ppo_model_logs')
+        
+        # Ensure base log directory exists
+        os.makedirs(self.log_dir, exist_ok=True)
+        os.makedirs(os.path.join(self.log_dir, 'flux_images'), exist_ok=True)
+        os.makedirs(os.path.join(self.log_dir, 'field_images'), exist_ok=True)
 
     def reset(self, seed=None, options=None):
         """
@@ -132,7 +144,9 @@ class MinimalEnv(gym.Env):
     def reward_plot(self, reward, flux_data):
         # save reward to csv
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        with open('/Users/ryan/NTUEE_Local/114-1/RL_FinalPJ/RL_FinalProject/ppo_model_logs/episode_rewards.csv', 'a') as f:
+        
+        csv_path = os.path.join(self.log_dir, 'episode_rewards.csv')
+        with open(csv_path, 'a') as f:
             f.write(f'{timestamp}, {reward}\n')
 
         plt.figure(figsize=(10, 6))
@@ -144,8 +158,9 @@ class MinimalEnv(gym.Env):
         plt.title(f'Flux Distribution at Step {self.material_matrix_idx}')
         plt.legend()
         plt.grid(True, alpha=0.3)
-        plt.savefig(
-            f'/Users/ryan/NTUEE_Local/114-1/RL_FinalPJ/RL_FinalProject/ppo_model_logs/flux_images/flux_distribution_{datetime.now().strftime("%Y%m%d_%H%M%S")}.png')
+        
+        img_path = os.path.join(self.log_dir, 'flux_images', f'flux_distribution_{timestamp}.png')
+        plt.savefig(img_path)
         plt.close()
 
     def field_result_plot(self, ez_data):
@@ -171,8 +186,9 @@ class MinimalEnv(gym.Env):
                 f'Field Distribution at Step {self.material_matrix_idx}')
             plt.legend()
             plt.grid(True, alpha=0.3)
-            plt.savefig(
-                f'/Users/ryan/NTUEE_Local/114-1/RL_FinalPJ/RL_FinalProject/ppo_model_logs/field_images/field_distribution_{datetime.now().strftime("%Y%m%d_%H%M%S")}.png')
+            
+            img_path = os.path.join(self.log_dir, 'field_images', f'field_distribution_{datetime.now().strftime("%Y%m%d_%H%M%S")}.png')
+            plt.savefig(img_path)
             plt.close()
         except Exception as e:
             print(f'Error plotting field results: {e}')
