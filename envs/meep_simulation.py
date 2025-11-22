@@ -931,17 +931,22 @@ class WaveguideSimulation:
         # Create simulation and add flux monitors
         self.create_simulation()
         self.add_flux_monitors_along_y()
+        self.add_input_flux_monitor()
+        self.add_output_flux_monitors()
 
         # Run simulation
         self.run()
 
         # Get flux distribution
-        _, flux_values = self.get_flux_distribution_along_y()
+        _, output_all_flux = self.get_flux_distribution_along_y()
+        input_flux_value = self.get_input_flux_value()
+        output_flux_value_1 = self.get_output_flux_values_1()
+        output_flux_value_2 = self.get_output_flux_values_2()
 
         # Get field data
         ez_data = self.get_field_data()
 
-        return flux_values, ez_data
+        return input_flux_value, output_flux_value_1, output_flux_value_2, output_all_flux, ez_data
 '''
 if __name__ == "__main__":
     # Example usage
