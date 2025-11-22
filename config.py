@@ -13,6 +13,7 @@ class SimulationConfig:
     waveguide_index: float
     waveguide_center_x: float
     waveguide_length: float
+    output_y_separation: float
     simulation_time: float
     num_flux_regions: int
     output_x: float
@@ -26,6 +27,7 @@ class SimulationConfig:
     src_pos_shift_coeff: float
     input_coupler_length: float
     output_coupler_length: float
+    input_waveguide_flux_region_x: float
 @dataclass
 class EnvironmentConfig:
     obs_size: int

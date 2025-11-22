@@ -47,7 +47,7 @@ class WaveguideSimulation:
         self.pml_layers = [mp.PML(config.simulation.pml_thickness)]
         self.waveguide_width = config.simulation.waveguide_width
         self.waveguide_index = config.simulation.waveguide_index
-
+        self.output_y_separation = config.simulation.output_y_separation
         # New coupling lengths
         self.input_coupler_length = config.simulation.input_coupler_length
         self.output_coupler_length = config.simulation.output_coupler_length # Used for output 1 and 2
@@ -65,6 +65,9 @@ class WaveguideSimulation:
         self.ez_data = None
         self.flux = None  # Single flux monitor object
         self.flux_regions = []  # List of flux monitors for y-axis distribution
+        self.input_flux_region = None # Flux monitor at the input waveguide
+        self.output_flux_region_1 = None # Flux monitor at the output waveguide 1
+        self.output_flux_region_2 = None # Flux monitor at the output waveguide 2
         self.num_flux_regions = config.simulation.num_flux_regions
         self.simulation_time = config.simulation.simulation_time
         self.output_x = config.simulation.output_x
@@ -76,6 +79,7 @@ class WaveguideSimulation:
         self.pixel_num_x = config.simulation.pixel_num_x
         self.pixel_num_y = config.simulation.pixel_num_y
         self.src_pos_shift_coeff = config.simulation.src_pos_shift_coeff
+        self.input_waveguide_flux_region_x = config.simulation.input_waveguide_flux_region_x
 
     def create_geometry(self, material_matrix=None):
         """
@@ -106,12 +110,11 @@ class WaveguideSimulation:
         output_length = self.output_coupler_length
         output_center_x = output_start_x + output_length / 2.0
         
-        # Symmetrical output positions (use the default 0.3 or a new class parameter)
-        output_y_separation = 0.6 # You can make this a configurable class property later
+        # Symmetrical output positions (use the default 0.3 or a new class parameter) # You can make this a configurable class property later
 
         # Output Waveguide 1 (Top)
         output_waveguide_1 = mp.Block(
-            center=mp.Vector3(output_center_x, output_y_separation, 0),
+            center=mp.Vector3(output_center_x, self.output_y_separation, 0),
             size=mp.Vector3(output_length, self.waveguide_width, 0),
             material=mp.Medium(index=self.waveguide_index)
         )
@@ -119,7 +122,7 @@ class WaveguideSimulation:
         
         # Output Waveguide 2 (Bottom)
         output_waveguide_2 = mp.Block(
-            center=mp.Vector3(output_center_x, -output_y_separation, 0),
+            center=mp.Vector3(output_center_x, -self.output_y_separation, 0),
             size=mp.Vector3(output_length, self.waveguide_width, 0),
             material=mp.Medium(index=self.waveguide_index)
         )
@@ -188,8 +191,7 @@ class WaveguideSimulation:
         y_max = y_range[1] if y_range is not None else y_max_default
         
         # --- 2. Calculate Waveguide Positions ---
-        waveguide_color = 'blue'
-        output_y_separation = 0.6 # Fixed separation, same as in create_geometry
+        waveguide_color = 'blue' # Fixed separation, same as in create_geometry
 
         # 2a. Input Waveguide (Ends at x = -1.0)
         input_length = self.input_coupler_length
@@ -200,8 +202,8 @@ class WaveguideSimulation:
         output_length = self.output_coupler_length
         output_x_start = self.design_region_x_max
 
-        output1_y_start = output_y_separation - self.waveguide_width / 2
-        output2_y_start = -output_y_separation - self.waveguide_width / 2
+        output1_y_start = self.output_y_separation - self.waveguide_width / 2
+        output2_y_start = -self.output_y_separation - self.waveguide_width / 2
 
         # --- 3. Plot Waveguides Explicitly ---
         
@@ -428,7 +430,45 @@ class WaveguideSimulation:
 
         self.flux_regions = flux_monitors
         return flux_monitors
+    
+    def add_input_flux_monitor(self):
+        """
+        Add flux monitor at the input waveguide
+        """
 
+        frequency = 1.0 / self.wavelength
+
+        if self.sim is None:
+            raise ValueError(
+                "Simulation must be created first. Call create_simulation() method.")
+        self.input_flux_region = mp.FluxRegion(
+            center=mp.Vector3(self.input_waveguide_flux_region_x, 0, 0),
+            size=mp.Vector3(0, self.waveguide_width, 0)
+        )
+        self.input_flux_region = self.sim.add_flux(frequency, 0, 1, self.input_flux_region)
+        return self.input_flux_region
+    
+    def add_output_flux_monitors(self):
+        """
+        Add flux monitors at the output waveguides
+        """
+        frequency = 1.0 / self.wavelength
+        if self.sim is None:
+            raise ValueError(
+                "Simulation must be created first. Call create_simulation() method.")
+        self.output_flux_region_1 = mp.FluxRegion(
+            center=mp.Vector3(self.output_x, self.output_y_separation, 0),
+            size=mp.Vector3(0, self.waveguide_width, 0)
+        )
+        self.output_flux_region_1 = self.sim.add_flux(frequency, 0, 1, self.output_flux_region_1)
+
+        self.output_flux_region_2 = mp.FluxRegion(
+            center=mp.Vector3(self.output_x, -self.output_y_separation, 0),
+            size=mp.Vector3(0, self.waveguide_width, 0)
+        )
+        self.output_flux_region_2 = self.sim.add_flux(frequency, 0, 1, self.output_flux_region_2)
+        return self.output_flux_region_1, self.output_flux_region_2
+    
     def get_flux_distribution_along_y(self):
         """
         Get flux values for all y-axis flux monitors
@@ -464,6 +504,33 @@ class WaveguideSimulation:
             y_min + region_height/2, y_max - region_height/2, num_regions)
 
         return y_positions, flux_values
+    
+    def get_input_flux_value(self):
+        """
+        Get flux value at the input waveguide
+        """
+        if self.input_flux_region is None:
+            raise ValueError(
+                "No flux monitor added. Call add_flux_monitor() first.")
+        return mp.get_fluxes(self.input_flux_region)[0]
+
+    def get_output_flux_values_1(self):
+        """
+        Get flux values at the output waveguides
+        """
+        if self.output_flux_region_1 is None:
+            raise ValueError(
+                "No output flux monitors added. Call add_output_flux_monitors() first.")
+        return mp.get_fluxes(self.output_flux_region_1)[0]
+    
+    def get_output_flux_values_2(self):
+        """
+        Get flux values at the output waveguides
+        """
+        if self.output_flux_region_2 is None:
+            raise ValueError(
+                "No output flux monitors added. Call add_output_flux_monitors() first.")
+        return mp.get_fluxes(self.output_flux_region_2)[0]
 
     def plot_flux_distribution_y(self, save_path=None, show_plot=True):
         """
@@ -862,17 +929,22 @@ class WaveguideSimulation:
         # Create simulation and add flux monitors
         self.create_simulation()
         self.add_flux_monitors_along_y()
+        self.add_input_flux_monitor()
+        self.add_output_flux_monitors()
 
         # Run simulation
         self.run()
 
         # Get flux distribution
-        _, flux_values = self.get_flux_distribution_along_y()
+        _, output_all_flux = self.get_flux_distribution_along_y()
+        input_flux_value = self.get_input_flux_value()
+        output_flux_value_1 = self.get_output_flux_values_1()
+        output_flux_value_2 = self.get_output_flux_values_2()
 
         # Get field data
         ez_data = self.get_field_data()
 
-        return flux_values, ez_data
+        return input_flux_value, output_flux_value_1, output_flux_value_2, output_all_flux, ez_data
 '''
 if __name__ == "__main__":
     # Example usage
