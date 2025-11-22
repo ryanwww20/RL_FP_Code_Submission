@@ -47,7 +47,7 @@ class WaveguideSimulation:
         self.pml_layers = [mp.PML(config.simulation.pml_thickness)]
         self.waveguide_width = config.simulation.waveguide_width
         self.waveguide_index = config.simulation.waveguide_index
-
+        self.output_y_separation = config.simulation.output_y_separation
         # New coupling lengths
         self.input_coupler_length = config.simulation.input_coupler_length
         self.output_coupler_length = config.simulation.output_coupler_length # Used for output 1 and 2
@@ -110,12 +110,11 @@ class WaveguideSimulation:
         output_length = self.output_coupler_length
         output_center_x = output_start_x + output_length / 2.0
         
-        # Symmetrical output positions (use the default 0.3 or a new class parameter)
-        output_y_separation = 0.6 # You can make this a configurable class property later
+        # Symmetrical output positions (use the default 0.3 or a new class parameter) # You can make this a configurable class property later
 
         # Output Waveguide 1 (Top)
         output_waveguide_1 = mp.Block(
-            center=mp.Vector3(output_center_x, output_y_separation, 0),
+            center=mp.Vector3(output_center_x, self.output_y_separation, 0),
             size=mp.Vector3(output_length, self.waveguide_width, 0),
             material=mp.Medium(index=self.waveguide_index)
         )
@@ -123,7 +122,7 @@ class WaveguideSimulation:
         
         # Output Waveguide 2 (Bottom)
         output_waveguide_2 = mp.Block(
-            center=mp.Vector3(output_center_x, -output_y_separation, 0),
+            center=mp.Vector3(output_center_x, -self.output_y_separation, 0),
             size=mp.Vector3(output_length, self.waveguide_width, 0),
             material=mp.Medium(index=self.waveguide_index)
         )
@@ -192,8 +191,7 @@ class WaveguideSimulation:
         y_max = y_range[1] if y_range is not None else y_max_default
         
         # --- 2. Calculate Waveguide Positions ---
-        waveguide_color = 'blue'
-        output_y_separation = 0.6 # Fixed separation, same as in create_geometry
+        waveguide_color = 'blue' # Fixed separation, same as in create_geometry
 
         # 2a. Input Waveguide (Ends at x = -1.0)
         input_length = self.input_coupler_length
@@ -204,8 +202,8 @@ class WaveguideSimulation:
         output_length = self.output_coupler_length
         output_x_start = self.design_region_x_max
 
-        output1_y_start = output_y_separation - self.waveguide_width / 2
-        output2_y_start = -output_y_separation - self.waveguide_width / 2
+        output1_y_start = self.output_y_separation - self.waveguide_width / 2
+        output2_y_start = -self.output_y_separation - self.waveguide_width / 2
 
         # --- 3. Plot Waveguides Explicitly ---
         

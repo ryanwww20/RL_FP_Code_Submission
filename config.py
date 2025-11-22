@@ -13,6 +13,7 @@ class SimulationConfig:
     waveguide_index: float
     waveguide_center_x: float
     waveguide_length: float
+    output_y_separation: float
     simulation_time: float
     num_flux_regions: int
     output_x: float
