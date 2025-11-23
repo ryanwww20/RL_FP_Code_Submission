@@ -813,7 +813,7 @@ if __name__ == "__main__":
     print("Plotting Centered Geometry (Design at x=[-1, 1])")
     calculator_A.plot_geometry(
         show_plot=False,
-        save_path='img/geometry_plot.png',  # Provide a file name here
+        save_path='sample_img/geometry_plot.png',  # Provide a file name here
         x_range=(-3.0, 3.0),
         y_range=(-2, 2)
     )
@@ -830,7 +830,7 @@ if __name__ == "__main__":
     calculator_A.plot_design(
         material_matrix=material_matrix,
         show_plot=False,
-        save_path='img/simulation_ez_field.png'  # Provide a file name here
+        save_path='sample_img/simulation_ez_field.png'  # Provide a file name here
     )
 
     # Get total flux
@@ -840,5 +840,5 @@ if __name__ == "__main__":
     calculator_A.plot_distribution(
         output_all_flux=flux_values,
         show_plot=False,
-        save_path='img/flux_distribution.png'  # Provide a file name here
+        save_path='sample_img/flux_distribution.png'  # Provide a file name here
     )

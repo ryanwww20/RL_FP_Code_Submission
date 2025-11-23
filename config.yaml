@@ -13,8 +13,8 @@ environment:
   target_flux:
     baseline: -1.0
     segments:
-      - {start: 20, end: 40, value: 2.0}
-      - {start: 60, end: 80, value: 2.0}
+      - { start: 20, end: 40, value: 2.0 }
+      - { start: 60, end: 80, value: 2.0 }
 
 simulation:
   resolution: 50
@@ -50,7 +50,8 @@ plots:
 
 training:
   ppo:
-    total_timesteps: 1000000
+    # total_timesteps: 1000000
+    total_timesteps: 50
     n_envs: 1
     learning_rate: 0.0003
     n_steps: 50
