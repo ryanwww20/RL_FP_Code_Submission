@@ -715,8 +715,17 @@ class WaveguideSimulation:
 
         # Save and show
         if save_path:
-            plt.savefig(save_path, dpi=150, bbox_inches='tight')
-            print(f"Simulation results saved to '{save_path}'")
+            try:
+                # Create directory if it doesn't exist
+                save_dir = os.path.dirname(save_path)
+                if save_dir and not os.path.exists(save_dir):
+                    os.makedirs(save_dir, exist_ok=True)
+                plt.savefig(save_path, dpi=150, bbox_inches='tight')
+                print(f"Simulation results saved to '{save_path}'")
+            except (FileNotFoundError, OSError) as e:
+                print(f"Warning: Could not save plot to '{save_path}': {e}")
+            except Exception as e:
+                print(f"Error saving plot: {e}")
         print(
             f"Waveguide: {self.waveguide_width}um wide, {self.waveguide_index} index")
         print(
@@ -745,8 +754,17 @@ class WaveguideSimulation:
         plt.grid(True, alpha=0.3)
 
         if save_path:
-            plt.savefig(save_path, dpi=150, bbox_inches='tight')
-            print(f"Flux distribution plot saved to '{save_path}'")
+            try:
+                # Create directory if it doesn't exist
+                save_dir = os.path.dirname(save_path)
+                if save_dir and not os.path.exists(save_dir):
+                    os.makedirs(save_dir, exist_ok=True)
+                plt.savefig(save_path, dpi=150, bbox_inches='tight')
+                print(f"Flux distribution plot saved to '{save_path}'")
+            except (FileNotFoundError, OSError) as e:
+                print(f"Warning: Could not save plot to '{save_path}': {e}")
+            except Exception as e:
+                print(f"Error saving plot: {e}")
 
         if show_plot:
             plt.show()
