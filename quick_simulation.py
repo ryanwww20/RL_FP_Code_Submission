@@ -22,3 +22,4 @@ simulation.plot_design(
 
 # calculate the loss, format to .4f
 print(f'Output Flux 1: {output_flux_1/input_flux:.4f}, Output Flux 2: {output_flux_2/input_flux:.4f}, Loss: {(input_flux - (output_flux_1 + output_flux_2))/input_flux:.4f}')
+print(f'output_all_flux: {sum(output_all_flux)/input_flux:.4f}')
