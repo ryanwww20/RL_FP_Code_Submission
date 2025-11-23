@@ -4,7 +4,8 @@ paths:
   flux_dir: ${paths.logs_root}/flux_images
   field_dir: ${paths.logs_root}/field_images
 
-state_dim: &state_dim 100
+state_dim: &state_dim 101
+state_dim_minus_1: &state_dim_minus_1 100
 
 environment:
   obs_size: *state_dim
@@ -27,7 +28,7 @@ simulation:
   waveguide_length: 1.8
   output_y_separation: 0.6
   simulation_time: 30
-  num_flux_regions: *state_dim
+  num_flux_regions: *state_dim_minus_1
   output_x: 2.0
   design_region_x: 2.0
   design_region_y: 2.0

@@ -110,16 +110,16 @@ class MinimalEnv(gym.Env):
         input_flux, output_flux_1, output_flux_2, output_all_flux, ez_data = self.simulation.calculate_flux(
             self.material_matrix)
 
-        reward = self.get_reward(input_flux, output_flux_1, output_flux_2)
-
+        current_score, reward = self.get_reward(
+            input_flux, output_flux_1, output_flux_2)
+        # Save reward to CSV
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        csv_path = os.path.join(self.log_dir, 'episode_rewards.csv')
+        with open(csv_path, 'a') as f:
+            f.write(f'{timestamp}, {current_score}, {reward}\n')
         # Check if episode is done
         terminated = self.material_matrix_idx >= self.max_steps  # Goal reached
         if terminated:
-            # Save reward to CSV
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            csv_path = os.path.join(self.log_dir, 'episode_rewards.csv')
-            with open(csv_path, 'a') as f:
-                f.write(f'{timestamp}, {reward}\n')
 
             # Use simulation methods for plotting
             flux_img_path = os.path.join(
@@ -139,7 +139,8 @@ class MinimalEnv(gym.Env):
             )
 
             print(
-                f'Input Flux: {input_flux}, Output Flux 1: {output_flux_1}, Output Flux 2: {output_flux_2}')
+                f'Output Flux 1: {output_flux_1/input_flux:.2f}, Output Flux 2: {output_flux_2/input_flux:.2f}, Loss: {(input_flux - (output_flux_1 + output_flux_2))/input_flux:.2e}')
+
         truncated = False   # Time limit exceeded
 
         # Get observation - return the current flux distribution as observation
@@ -154,13 +155,14 @@ class MinimalEnv(gym.Env):
 
         # Info dictionary (can contain debugging info)
         info = {}
+        observation = np.append(observation, self.material_matrix_idx)
 
         return observation, reward, terminated, truncated, info
 
     def get_reward(self, input_flux, output_flux_1, output_flux_2):
-        current_score = (output_flux_1 - input_flux*0.5)**2 + \
-            (output_flux_2 - input_flux*0.5)**2
+        current_score = -((output_flux_1 - input_flux*0.5)**2 +
+                          (output_flux_2 - input_flux*0.5)**2)
         reward = current_score - self.last_score
         self.last_score = current_score
 
-        return reward
+        return current_score, reward
