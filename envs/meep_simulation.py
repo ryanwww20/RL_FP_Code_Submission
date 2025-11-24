@@ -599,7 +599,8 @@ class WaveguideSimulation:
         # Plot electric field
         # Transpose ez_data because imshow expects (rows, cols) where rows=y, cols=x
         # Meep's get_array gives (x, y), so transpose for correct orientation
-        plt.imshow(self.ez_data, interpolation='spline36', cmap='RdBu',
+        field_magnitude = np.abs(self.ez_data)
+        plt.imshow(field_magnitude, interpolation='spline36', cmap='viridis',
                    aspect='auto', extent=extent, origin='lower')
         plt.colorbar(label='Ez (electric field)')
         plt.xlabel('x (microns)')
