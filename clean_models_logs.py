@@ -10,7 +10,6 @@ from pathlib import Path
 
 # Directories to delete
 DIRECTORIES_TO_DELETE = [
-    "models",
     "ppo_model_logs",
     "ppo_tensorboard",
     "sac_model_logs",

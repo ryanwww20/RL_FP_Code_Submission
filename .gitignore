@@ -5,10 +5,10 @@ events.out.tfevents.*
 **/events.out.tfevents.*
 sample_img/
 
-ppo_model_logs/
-ppo_tensorboard/
-sac_tensorboard/
-sac_model_logs/
+ppo_model_logs*/
+ppo_tensorboard*/
+sac_tensorboard*/
+sac_model_logs*/
 
 models/
 

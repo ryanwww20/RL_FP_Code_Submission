@@ -303,7 +303,7 @@ class WaveguideSimulation:
             ),
             # Position source at the start of the input coupler
             center=mp.Vector3(input_coupler_start_x *
-                              self.src_pos_shift_coeff, 0, 0),
+                              self.src_pos_shift_coeff, 0.0, 0),
             size=mp.Vector3(0, self.waveguide_width, 0),
             eig_band=1,
             direction=mp.NO_DIRECTION,
@@ -736,7 +736,7 @@ class WaveguideSimulation:
         else:
             plt.close()
 
-    def plot_distribution(self, output_all_flux, save_path=None, show_plot=True):
+    def plot_distribution(self, output_all_flux, input_flux, save_path=None, show_plot=True):
         """
         Plot the flux distribution along the output plane.
 
@@ -746,10 +746,11 @@ class WaveguideSimulation:
             show_plot: Whether to display the plot
         """
         plt.figure(figsize=(10, 6))
-        plt.plot(output_all_flux, 'b-', linewidth=2, label='Flux Distribution')
+        plt.plot(output_all_flux/input_flux, 'b-',
+                 linewidth=2, label='Flux Distribution')
         plt.xlabel('Detector Index')
-        plt.ylabel('Flux')
-        plt.title('Flux Distribution at Output Plane')
+        plt.ylabel('Flux Ratio (Output/Input)')
+        plt.title('Flux Distribution Ratio at Output Plane')
         plt.legend()
         plt.grid(True, alpha=0.3)
 
@@ -836,9 +837,12 @@ if __name__ == "__main__":
     # Get total flux
     _, flux_values = calculator_A.get_flux_distribution_along_y()
     print(f"Total flux measured: {np.sum(flux_values):.4e}")
+    # get input flux
+    input_flux = calculator_A.get_input_flux_value()
 
     calculator_A.plot_distribution(
         output_all_flux=flux_values,
+        input_flux=input_flux,
         show_plot=False,
         save_path='sample_img/flux_distribution.png'  # Provide a file name here
     )
