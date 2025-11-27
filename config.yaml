@@ -57,8 +57,6 @@ training:
     learning_rate: 0.0003
     n_steps: 20
     batch_size: 160
-    n_epochs: 15
-    batch_size: 160
     n_epochs: 10
     gamma: 0.99
     gae_lambda: 0.95
