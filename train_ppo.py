@@ -11,6 +11,7 @@ from datetime import datetime
 import yaml
 from stable_baselines3 import PPO
 from stable_baselines3.common.env_util import make_vec_env
+from stable_baselines3.common.callbacks import BaseCallback
 from envs.Discrete_gym import MinimalEnv
 
 CONFIG_ENV_VAR = "TRAINING_CONFIG_PATH"
@@ -31,6 +32,48 @@ TRAIN_PPO_KWARGS = {
     "tensorboard_log",
     "save_path",
 }
+
+
+class ProgressCallback(BaseCallback):
+    """
+    Custom callback to print training progress including rollout and epoch information.
+    """
+    def __init__(self, verbose=1, print_interval=1):
+        super(ProgressCallback, self).__init__(verbose)
+        self.rollout_count = 0
+        self.print_interval = print_interval
+        self.n_epochs = None
+        
+    def _on_step(self) -> bool:
+        return True
+    
+    def _on_rollout_start(self) -> None:
+        """Called when a new rollout collection starts."""
+        if self.rollout_count % self.print_interval == 0:
+            print(f"\n[Rollout {self.rollout_count + 1}] Collecting rollout data...")
+    
+    def _on_rollout_end(self) -> None:
+        """Called when rollout collection ends and training update begins."""
+        self.rollout_count += 1
+        if self.rollout_count % self.print_interval == 0:
+            num_timesteps = self.num_timesteps
+            if self.n_epochs is None and hasattr(self.model, 'n_epochs'):
+                self.n_epochs = self.model.n_epochs
+            epoch_info = f" (n_epochs={self.n_epochs})" if self.n_epochs else ""
+            print(f"[Rollout {self.rollout_count}] Timesteps: {num_timesteps}{epoch_info} | Starting training update...")
+    
+    def _on_training_start(self) -> None:
+        """Called when training starts."""
+        print("Training started!")
+        if hasattr(self.model, 'n_steps'):
+            print(f"Rollout length: {self.model.n_steps} steps")
+        if hasattr(self.model, 'n_epochs'):
+            self.n_epochs = self.model.n_epochs
+            print(f"Epochs per update: {self.model.n_epochs}")
+    
+    def _on_training_end(self) -> None:
+        """Called when training ends."""
+        print(f"\nTraining complete! Total rollouts: {self.rollout_count}")
 
 
 def train_ppo(
@@ -96,13 +139,17 @@ def train_ppo(
         verbose=1
     )
 
+    # Create progress callback
+    progress_callback = ProgressCallback(verbose=1)
+    
     # Train the model
     print(f"Training PPO agent for {total_timesteps} timesteps...")
     print("Press Ctrl+C to interrupt training and save current model...")
     try:
         model.learn(
             total_timesteps=total_timesteps,
-            progress_bar=False  # Set to False to avoid tqdm/rich dependency
+            progress_bar=False,  # Set to False to avoid tqdm/rich dependency
+            callback=progress_callback
         )
     except KeyboardInterrupt:
         print("\n\nTraining interrupted by user (Ctrl+C)")
