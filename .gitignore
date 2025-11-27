@@ -4,16 +4,19 @@ __pycache__/
 events.out.tfevents.*
 **/events.out.tfevents.*
 sample_img/
+simul_time_dis/
 wandb/
 
 ppo_model_logs*/
 ppo_tensorboard*/
 sac_tensorboard*/
 sac_model_logs*/
+simul_time_dis/
 
 models/
 
 .DS_Store
+
 
 job.sh
 rl_log_*.txt

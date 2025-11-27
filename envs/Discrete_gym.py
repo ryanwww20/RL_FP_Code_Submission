@@ -88,8 +88,8 @@ class MinimalEnv(gym.Env):
         return observation, info
 
     def step(self, action):
-        print(
-            f"Step {self.material_matrix_idx} with action: {action[:5]}", end="\r")
+        # print(
+        #     f"Step {self.material_matrix_idx} with action: {action[:5]}", end="\r")
         """
         Execute one step in the environment.
 
@@ -109,12 +109,14 @@ class MinimalEnv(gym.Env):
         # Action is a binary array of length 50
         self.material_matrix[self.material_matrix_idx] = action
         self.material_matrix_idx += 1
+        output_plane_x = -1 + (self.material_matrix_idx+0.1) * \
+            config.simulation.pixel_size
 
         input_flux, output_flux_1, output_flux_2, output_all_flux, ez_data = self.simulation.calculate_flux(
-            self.material_matrix)
-        print(f"Input flux: {input_flux:.4e}")
-        print(f"Output flux 1: {output_flux_1:.4e}")
-        print(f"Output flux 2: {output_flux_2:.4e}")
+            self.material_matrix, output_plane_x=output_plane_x)
+        # print(f"Input flux: {input_flux:.4e}")
+        # print(f"Output flux 1: {output_flux_1:.4e}")
+        # print(f"Output flux 2: {output_flux_2:.4e}")
 
         current_score, reward = self.get_reward(
             input_flux, output_flux_1, output_flux_2)
@@ -123,6 +125,7 @@ class MinimalEnv(gym.Env):
         # Save reward to CSV
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         csv_path = os.path.join(self.log_dir, 'episode_rewards.csv')
+        csv_path_terminated = os.path.join(self.log_dir, 'episode_rewards_terminated.csv')
         # add column names for the first time
         if not os.path.exists(csv_path):
             with open(csv_path, 'w') as f:
@@ -130,7 +133,7 @@ class MinimalEnv(gym.Env):
                     'timestamp, current_score, reward, output_flux_1_ratio, output_flux_2_ratio, loss_ratio\n')
         with open(csv_path, 'a') as f:
             f.write(f'{timestamp}, {current_score}, {reward}, {output_flux_1/input_flux}, {output_flux_2/input_flux}, {(input_flux - (output_flux_1 + output_flux_2))/input_flux}\n')
-        # Check if episode is done
+       
         terminated = self.material_matrix_idx >= self.max_steps  # Goal reached
         if terminated:
 
@@ -152,16 +155,18 @@ class MinimalEnv(gym.Env):
                 show_plot=False
             )
 
-            print(
-                f'Output Flux 1: {output_flux_1/input_flux:.2f}, Output Flux 2: {output_flux_2/input_flux:.2f}, Loss: {(input_flux - (output_flux_1 + output_flux_2))/input_flux:.2f}')
-
+            if not os.path.exists(csv_path_terminated):
+                with open(csv_path_terminated, 'w') as f:
+                    f.write('timestamp, current_score, reward, output_flux_1_ratio, output_flux_2_ratio, loss_ratio\n')
+            with open(csv_path_terminated, 'a') as f:
+                f.write(f'{timestamp}, {current_score}, {reward}, {output_flux_1/input_flux}, {output_flux_2/input_flux}, {(input_flux - (output_flux_1 + output_flux_2))/input_flux}\n')
         truncated = False   # Time limit exceeded
 
         # Get observation - return the current flux distribution as observation
         # This gives the agent feedback about the current state
         if self.material_matrix_idx > 0:
             # Calculate current flux as observation
-            observation = output_all_flux.copy()
+            observation = output_all_flux.copy()/input_flux
 
         else:
             # Initial state: return zeros
