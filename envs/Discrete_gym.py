@@ -154,10 +154,11 @@ class MinimalEnv(gym.Env):
                 save_path=field_img_path,
                 show_plot=False
             )
-
-            # print(
-                # f'Output Flux 1: {output_flux_1/input_flux:.2f}, Output Flux 2: {output_flux_2/input_flux:.2f}, Loss: {(input_flux - (output_flux_1 + output_flux_2))/input_flux:.2f}')
-
+            if not os.path.exists(csv_path):
+                with open(csv_path, 'w') as f:
+                    f.write('timestamp, current_score, reward, output_flux_1_ratio, output_flux_2_ratio, loss_ratio\n')
+            with open(csv_path, 'a') as f:
+                f.write(f'{timestamp}, {current_score}, {reward}, {output_flux_1/input_flux}, {output_flux_2/input_flux}, {(input_flux - (output_flux_1 + output_flux_2))/input_flux}\n')
         truncated = False   # Time limit exceeded
 
         # Get observation - return the current flux distribution as observation
