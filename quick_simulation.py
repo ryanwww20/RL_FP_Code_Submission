@@ -46,17 +46,15 @@ simulation.plot_distribution(
 simulation.plot_design(
     material_matrix, save_path='sample_img/design.png', show_plot=False)
 
-    # calculate the loss, format to .4f
-    print('=============== Flux Results ===============')
-    print(f'Input Flux: {input_flux:.4f}')
-    if input_flux != 0:
-        print(f'Output Flux 1: {output_flux_1/input_flux*100:.2f}%')
-        print(f'Output Flux 2: {output_flux_2/input_flux*100:.2f}%')
-        print(f'Loss: {(input_flux - (output_flux_1 + output_flux_2))/input_flux*100:.2f}%')
-        print(f'Output_all_flux: {sum(output_all_flux)/input_flux*100:.2f}%')
-    else:
-        print("Input Flux is 0, cannot calculate percentages.")
-    print('============================================')
+# calculate the loss, format to .4f
+print('=============== Flux Results ===============')
+print(f'Input Flux: {input_flux:.4f}')
+if input_flux != 0:
+    print(f'Output Flux 1: {output_flux_1/input_flux*100:.2f}%')
+    print(f'Output Flux 2: {output_flux_2/input_flux*100:.2f}%')
+    print(f'Loss: {(input_flux - (output_flux_1 + output_flux_2))/input_flux*100:.2f}%')
+    print(f'Output_all_flux: {sum(output_all_flux)/input_flux*100:.2f}%')
+else:
+    print("Input Flux is 0, cannot calculate percentages.")
+print('============================================')
 
-if __name__ == "__main__":
-    main()
