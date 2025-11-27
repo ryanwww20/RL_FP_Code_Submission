@@ -85,8 +85,8 @@ class MinimalEnv(gym.Env):
         return observation, info
 
     def step(self, action):
-        print(
-            f"Step {self.material_matrix_idx} with action: {action[:5]}", end="\r")
+        # print(
+        #     f"Step {self.material_matrix_idx} with action: {action[:5]}", end="\r")
         """
         Execute one step in the environment.
 
@@ -111,12 +111,13 @@ class MinimalEnv(gym.Env):
 
         input_flux, output_flux_1, output_flux_2, output_all_flux, ez_data = self.simulation.calculate_flux(
             self.material_matrix, output_plane_x=output_plane_x)
-        print(f"Input flux: {input_flux:.4e}")
-        print(f"Output flux 1: {output_flux_1:.4e}")
-        print(f"Output flux 2: {output_flux_2:.4e}")
+        # print(f"Input flux: {input_flux:.4e}")
+        # print(f"Output flux 1: {output_flux_1:.4e}")
+        # print(f"Output flux 2: {output_flux_2:.4e}")
 
         current_score, reward = self.get_reward(
             input_flux, output_flux_1, output_flux_2)
+        # print(f"Current score: {current_score:.4f}, Reward: {reward:.4f}")
         # Save reward to CSV
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         csv_path = os.path.join(self.log_dir, 'episode_rewards.csv')
@@ -149,8 +150,8 @@ class MinimalEnv(gym.Env):
                 show_plot=False
             )
 
-            print(
-                f'Output Flux 1: {output_flux_1/input_flux:.2f}, Output Flux 2: {output_flux_2/input_flux:.2f}, Loss: {(input_flux - (output_flux_1 + output_flux_2))/input_flux:.2f}')
+            # print(
+                # f'Output Flux 1: {output_flux_1/input_flux:.2f}, Output Flux 2: {output_flux_2/input_flux:.2f}, Loss: {(input_flux - (output_flux_1 + output_flux_2))/input_flux:.2f}')
 
         truncated = False   # Time limit exceeded
 
@@ -173,6 +174,7 @@ class MinimalEnv(gym.Env):
     def get_reward(self, input_flux, output_flux_1, output_flux_2):
         current_score = -((output_flux_1 - input_flux*0.5)**2 +
                           (output_flux_2 - input_flux*0.5)**2)
+        current_score /= 1000000
         reward = current_score - self.last_score if self.last_score is not None else 0
         self.last_score = current_score
 
