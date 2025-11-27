@@ -9,6 +9,8 @@ from pathlib import Path
 from datetime import datetime
 
 import yaml
+import wandb
+from wandb.integration.sb3 import WandbCallback
 from stable_baselines3 import PPO
 from stable_baselines3.common.env_util import make_vec_env
 from stable_baselines3.common.callbacks import BaseCallback
@@ -90,7 +92,11 @@ def train_ppo(
     vf_coef=0.5,
     max_grad_norm=0.5,
     tensorboard_log="./ppo_tensorboard/",
-    save_path="./ppo_model"
+    save_path="./ppo_model",
+    wandb_project=None,
+    wandb_entity=None,
+    wandb_run_name=None,
+    wandb_tags=None,
 ):
     """
     Train a PPO agent on the MinimalEnv environment.
@@ -110,7 +116,28 @@ def train_ppo(
         max_grad_norm: Maximum gradient norm for clipping
         tensorboard_log: Directory for tensorboard logs
         save_path: Path to save the trained model
+        wandb_project: WandB project name (optional)
+        wandb_entity: WandB entity/username (optional)
+        wandb_run_name: WandB run name (optional)
+        wandb_tags: List of tags for WandB run (optional)
     """
+
+    # Initialize WandB if project name is provided
+    callback = None
+    if wandb_project:
+        run = wandb.init(
+            project=wandb_project,
+            entity=wandb_entity,
+            name=wandb_run_name,
+            tags=wandb_tags,
+            sync_tensorboard=True,  # Sync TensorBoard logs
+            monitor_gym=True,       # Monitor Gym environment
+            save_code=True,         # Save code
+        )
+        callback = WandbCallback(
+            model_save_path=f"models/{run.id}",
+            verbose=2,
+        )
 
     # Create vectorized environment (parallel environments)
     print("Creating environment...")
@@ -148,8 +175,8 @@ def train_ppo(
     try:
         model.learn(
             total_timesteps=total_timesteps,
-            progress_bar=False,  # Set to False to avoid tqdm/rich dependency
-            callback=progress_callback
+            callback=callback,
+            progress_bar=False  # Set to False to avoid tqdm/rich dependency
         )
     except KeyboardInterrupt:
         print("\n\nTraining interrupted by user (Ctrl+C)")
@@ -173,6 +200,9 @@ def train_ppo(
     # Test the trained model
     print("\nTesting trained model...")
     test_model(model, eval_env, n_episodes=3)
+
+    if wandb_project:
+        wandb.finish()
 
     return model
 
