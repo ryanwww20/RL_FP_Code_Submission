@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=ppo_train
+#SBATCH --job-name=ppo_train_20251128_005703
 #SBATCH --output=rl_log_%j.txt
 #SBATCH --ntasks=16
 #SBATCH --time=12:00:00
