@@ -2989,3 +2989,91 @@ EigenModeSource: Continuous wave at 1.55um, from left
 |    policy_gradient_loss | -0.00549     |
 |    value_loss           | 4.59e+03     |
 ------------------------------------------
+
+[Rollout 35] Collecting rollout data...
+Flux distribution plot saved to '/storage/undergrad/b12901074/RL_FinalProject/ppo_model_logs/flux_images/flux_distribution_20251128_002054.png'
+Simulation results saved to '/storage/undergrad/b12901074/RL_FinalProject/ppo_model_logs/field_images/field_distribution_20251128_002054.png'
+Waveguide: 0.4um wide, 3.45 index
+EigenModeSource: Continuous wave at 1.55um, from left
+Flux distribution plot saved to '/storage/undergrad/b12901074/RL_FinalProject/ppo_model_logs/flux_images/flux_distribution_20251128_002058.png'
+Simulation results saved to '/storage/undergrad/b12901074/RL_FinalProject/ppo_model_logs/field_images/field_distribution_20251128_002058.png'
+Waveguide: 0.4um wide, 3.45 index
+EigenModeSource: Continuous wave at 1.55um, from left
+Flux distribution plot saved to '/storage/undergrad/b12901074/RL_FinalProject/ppo_model_logs/flux_images/flux_distribution_20251128_002101.png'
+Simulation results saved to '/storage/undergrad/b12901074/RL_FinalProject/ppo_model_logs/field_images/field_distribution_20251128_002101.png'
+Waveguide: 0.4um wide, 3.45 index
+EigenModeSource: Continuous wave at 1.55um, from left
+Flux distribution plot saved to '/storage/undergrad/b12901074/RL_FinalProject/ppo_model_logs/flux_images/flux_distribution_20251128_002106.png'
+Simulation results saved to '/storage/undergrad/b12901074/RL_FinalProject/ppo_model_logs/field_images/field_distribution_20251128_002106.png'
+Waveguide: 0.4um wide, 3.45 index
+EigenModeSource: Continuous wave at 1.55um, from left
+Flux distribution plot saved to '/storage/undergrad/b12901074/RL_FinalProject/ppo_model_logs/flux_images/flux_distribution_20251128_002109.png'
+Simulation results saved to '/storage/undergrad/b12901074/RL_FinalProject/ppo_model_logs/field_images/field_distribution_20251128_002109.png'
+Waveguide: 0.4um wide, 3.45 index
+EigenModeSource: Continuous wave at 1.55um, from left
+Flux distribution plot saved to '/storage/undergrad/b12901074/RL_FinalProject/ppo_model_logs/flux_images/flux_distribution_20251128_002113.png'
+Simulation results saved to '/storage/undergrad/b12901074/RL_FinalProject/ppo_model_logs/field_images/field_distribution_20251128_002113.png'
+Waveguide: 0.4um wide, 3.45 index
+EigenModeSource: Continuous wave at 1.55um, from left
+Flux distribution plot saved to '/storage/undergrad/b12901074/RL_FinalProject/ppo_model_logs/flux_images/flux_distribution_20251128_002117.png'
+Simulation results saved to '/storage/undergrad/b12901074/RL_FinalProject/ppo_model_logs/field_images/field_distribution_20251128_002117.png'
+Waveguide: 0.4um wide, 3.45 index
+EigenModeSource: Continuous wave at 1.55um, from left
+Flux distribution plot saved to '/storage/undergrad/b12901074/RL_FinalProject/ppo_model_logs/flux_images/flux_distribution_20251128_002121.png'
+Simulation results saved to '/storage/undergrad/b12901074/RL_FinalProject/ppo_model_logs/field_images/field_distribution_20251128_002121.png'
+Waveguide: 0.4um wide, 3.45 index
+EigenModeSource: Continuous wave at 1.55um, from left
+Flux distribution plot saved to '/storage/undergrad/b12901074/RL_FinalProject/ppo_model_logs/flux_images/flux_distribution_20251128_002125.png'
+Simulation results saved to '/storage/undergrad/b12901074/RL_FinalProject/ppo_model_logs/field_images/field_distribution_20251128_002125.png'
+Waveguide: 0.4um wide, 3.45 index
+EigenModeSource: Continuous wave at 1.55um, from left
+Flux distribution plot saved to '/storage/undergrad/b12901074/RL_FinalProject/ppo_model_logs/flux_images/flux_distribution_20251128_002129.png'
+Simulation results saved to '/storage/undergrad/b12901074/RL_FinalProject/ppo_model_logs/field_images/field_distribution_20251128_002129.png'
+Waveguide: 0.4um wide, 3.45 index
+EigenModeSource: Continuous wave at 1.55um, from left
+Flux distribution plot saved to '/storage/undergrad/b12901074/RL_FinalProject/ppo_model_logs/flux_images/flux_distribution_20251128_002133.png'
+Simulation results saved to '/storage/undergrad/b12901074/RL_FinalProject/ppo_model_logs/field_images/field_distribution_20251128_002133.png'
+Waveguide: 0.4um wide, 3.45 index
+EigenModeSource: Continuous wave at 1.55um, from left
+Flux distribution plot saved to '/storage/undergrad/b12901074/RL_FinalProject/ppo_model_logs/flux_images/flux_distribution_20251128_002136.png'
+Simulation results saved to '/storage/undergrad/b12901074/RL_FinalProject/ppo_model_logs/field_images/field_distribution_20251128_002136.png'
+Waveguide: 0.4um wide, 3.45 index
+EigenModeSource: Continuous wave at 1.55um, from left
+Flux distribution plot saved to '/storage/undergrad/b12901074/RL_FinalProject/ppo_model_logs/flux_images/flux_distribution_20251128_002141.png'
+Simulation results saved to '/storage/undergrad/b12901074/RL_FinalProject/ppo_model_logs/field_images/field_distribution_20251128_002141.png'
+Waveguide: 0.4um wide, 3.45 index
+EigenModeSource: Continuous wave at 1.55um, from left
+Flux distribution plot saved to '/storage/undergrad/b12901074/RL_FinalProject/ppo_model_logs/flux_images/flux_distribution_20251128_002144.png'
+Simulation results saved to '/storage/undergrad/b12901074/RL_FinalProject/ppo_model_logs/field_images/field_distribution_20251128_002144.png'
+Waveguide: 0.4um wide, 3.45 index
+EigenModeSource: Continuous wave at 1.55um, from left
+Flux distribution plot saved to '/storage/undergrad/b12901074/RL_FinalProject/ppo_model_logs/flux_images/flux_distribution_20251128_002148.png'
+Simulation results saved to '/storage/undergrad/b12901074/RL_FinalProject/ppo_model_logs/field_images/field_distribution_20251128_002148.png'
+Waveguide: 0.4um wide, 3.45 index
+EigenModeSource: Continuous wave at 1.55um, from left
+Flux distribution plot saved to '/storage/undergrad/b12901074/RL_FinalProject/ppo_model_logs/flux_images/flux_distribution_20251128_002152.png'
+Simulation results saved to '/storage/undergrad/b12901074/RL_FinalProject/ppo_model_logs/field_images/field_distribution_20251128_002152.png'
+Waveguide: 0.4um wide, 3.45 index
+EigenModeSource: Continuous wave at 1.55um, from left
+[Rollout 35] Timesteps: 11200 (n_epochs=15) | Starting training update...
+-----------------------------------------
+| rollout/                |             |
+|    ep_len_mean          | 20          |
+|    ep_rew_mean          | 28.4        |
+| time/                   |             |
+|    fps                  | 0           |
+|    iterations           | 35          |
+|    time_elapsed         | 33754       |
+|    total_timesteps      | 11200       |
+| train/                  |             |
+|    approx_kl            | 0.013958804 |
+|    clip_fraction        | 0.118       |
+|    clip_range           | 0.2         |
+|    entropy_loss         | -13.5       |
+|    explained_variance   | 0.01        |
+|    learning_rate        | 0.0003      |
+|    loss                 | 3.91e+03    |
+|    n_updates            | 510         |
+|    policy_gradient_loss | -0.0137     |
+|    value_loss           | 6.73e+03    |
+-----------------------------------------
