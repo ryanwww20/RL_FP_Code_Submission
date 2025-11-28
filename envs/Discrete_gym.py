@@ -140,7 +140,8 @@ class MinimalEnv(gym.Env):
        
         terminated = self.material_matrix_idx >= self.max_steps  # Goal reached
         if terminated:
-
+            self.reward_history = []
+            self.current_score_history = []
             # Use simulation methods for plotting
             flux_img_path = os.path.join(
                 self.log_dir, 'flux_images', f'flux_distribution_{timestamp}.png')

@@ -13,7 +13,7 @@ import wandb
 from wandb.integration.sb3 import WandbCallback
 from stable_baselines3 import PPO
 from stable_baselines3.common.env_util import make_vec_env
-from stable_baselines3.common.callbacks import BaseCallback
+from stable_baselines3.common.callbacks import BaseCallback, CheckpointCallback
 from envs.Discrete_gym import MinimalEnv
 
 
@@ -66,6 +66,7 @@ TRAIN_PPO_KWARGS = {
     "max_grad_norm",
     "tensorboard_log",
     "save_path",
+    "checkpoint_freq",
     "wandb_project",
     "wandb_entity",
     "wandb_run_name",
@@ -130,6 +131,7 @@ def train_ppo(
     max_grad_norm=0.5,
     tensorboard_log="./ppo_tensorboard/",
     save_path="./ppo_model",
+    checkpoint_freq=200,
     wandb_project=None,
     wandb_entity=None,
     wandb_run_name=None,
@@ -153,6 +155,7 @@ def train_ppo(
         max_grad_norm: Maximum gradient norm for clipping
         tensorboard_log: Directory for tensorboard logs
         save_path: Path to save the trained model
+        checkpoint_freq: Frequency (in timesteps) to save checkpoints
         wandb_project: WandB project name (optional)
         wandb_entity: WandB entity/username (optional)
         wandb_run_name: WandB run name (optional)
@@ -161,6 +164,24 @@ def train_ppo(
 
     # Initialize WandB if project name is provided
     callbacks = []
+    
+    # Create checkpoint directory with timestamp
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    checkpoint_dir = f"{save_path}_checkpoints_{timestamp}"
+    os.makedirs(checkpoint_dir, exist_ok=True)
+    
+    # Add checkpoint callback to save model every checkpoint_freq steps
+    checkpoint_callback = CheckpointCallback(
+        save_freq=checkpoint_freq,
+        save_path=checkpoint_dir,
+        name_prefix="ppo_checkpoint",
+        save_replay_buffer=False,
+        save_vecnormalize=True,
+        verbose=1,
+    )
+    callbacks.append(checkpoint_callback)
+    print(f"Checkpoints will be saved every {checkpoint_freq} steps to {checkpoint_dir}")
+    
     if wandb_project:
         run = wandb.init(
             project=wandb_project,
@@ -223,8 +244,7 @@ def train_ppo(
         print(f"Error during training: {e}")
 
     # Save the final model (even if interrupted)
-    # Add timestamp to model name
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    # Use same timestamp as checkpoint directory
     save_path_with_timestamp = f"{save_path}_{timestamp}"
 
     # Create directory if it doesn't exist
