@@ -9,26 +9,26 @@ with open('matrix_for_quick_simulation_20x20.txt', 'r') as file:
     material_matrix = np.array(
         [list(map(int, line.strip().split())) for line in file.readlines()])
 
-    try:
-        with open(args.matrix_file, 'r') as file:
-            material_matrix = np.array(
-                [list(map(int, line.strip().split())) for line in file.readlines()])
-            # Preserve the transformations from the original script
-            material_matrix = np.rot90(material_matrix, k=-1)
-    except FileNotFoundError:
-        print(f"Error: File '{args.matrix_file}' not found.")
-        sys.exit(1)
-    except Exception as e:
-        print(f"Error reading matrix file: {e}")
-        sys.exit(1)
+    # try:
+    #     with open(args.matrix_file, 'r') as file:
+    #         material_matrix = np.array(
+    #             [list(map(int, line.strip().split())) for line in file.readlines()])
+    #         # Preserve the transformations from the original script
+    #         material_matrix = np.rot90(material_matrix, k=-1)
+    # except FileNotFoundError:
+    #     print(f"Error: File '{args.matrix_file}' not found.")
+    #     sys.exit(1)
+    # except Exception as e:
+    #     print(f"Error reading matrix file: {e}")
+    #     sys.exit(1)
 
-    # use meep_simulation to calculate the flux
-    print(f"Running simulation for: {args.matrix_file}")
-    simulation = WaveguideSimulation()
-    
-    # Note: Ensure get_field_data or get_hzfield_data is correctly defined/called in WaveguideSimulation
-    input_flux, output_flux_1, output_flux_2, output_all_flux, field_data = simulation.calculate_flux(
-        material_matrix)
+    # # use meep_simulation to calculate the flux
+    # print(f"Running simulation for: {args.matrix_file}")
+simulation = WaveguideSimulation()
+
+# Note: Ensure get_field_data or get_hzfield_data is correctly defined/called in WaveguideSimulation
+input_flux, output_flux_1, output_flux_2, output_all_flux, field_data = simulation.calculate_flux(
+    material_matrix)
 
 total_transmission = (output_flux_1 + output_flux_2) / input_flux
 transmission_score = min(max(total_transmission, 0), 1)
