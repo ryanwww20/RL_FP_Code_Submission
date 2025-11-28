@@ -56,8 +56,13 @@ training:
     n_envs: 16
     learning_rate: 0.0003
     n_steps: 20
+<<<<<<< HEAD
     batch_size: 160
     n_epochs: 10
+=======
+    batch_size: 20
+    n_epochs: 50
+>>>>>>> c73366e (Update training parameters and enhance logging in environment classes)
     gamma: 0.99
     gae_lambda: 0.95
     clip_range: 0.2
