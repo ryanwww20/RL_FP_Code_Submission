@@ -12,6 +12,7 @@ ppo_tensorboard*/
 sac_tensorboard*/
 sac_model_logs*/
 simul_time_dis/
+playground/
 
 models/
 
