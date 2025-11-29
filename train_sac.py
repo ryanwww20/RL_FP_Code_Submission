@@ -9,45 +9,9 @@ from pathlib import Path
 from datetime import datetime
 
 import yaml
-import wandb
-from wandb.integration.sb3 import WandbCallback
 from stable_baselines3 import SAC
 from stable_baselines3.common.env_util import make_vec_env, SubprocVecEnv
-from stable_baselines3.common.callbacks import BaseCallback, CheckpointCallback
 from envs.Continuous_gym import MinimalEnv
-
-
-class CustomMetricsCallback(BaseCallback):
-    """
-    Custom callback to log environment-specific metrics to WandB.
-    Logs every step for detailed tracking.
-    """
-    def __init__(self, verbose=0):
-        super().__init__(verbose)
-        self.metric_keys = [
-            "total_transmission",
-            "transmission_score",
-            "balance_score",
-            "current_score",
-            "output_flux_1_ratio",
-            "output_flux_2_ratio",
-            "loss_ratio",
-        ]
-
-    def _on_step(self) -> bool:
-        # Get info from the environment
-        infos = self.locals.get("infos", [])
-        for info in infos:
-            metrics_to_log = {}
-            for key in self.metric_keys:
-                if key in info:
-                    metrics_to_log[f"env/{key}"] = info[key]
-            
-            # Log immediately if we have metrics
-            if metrics_to_log:
-                wandb.log(metrics_to_log, step=self.num_timesteps)
-
-        return True
 
 CONFIG_ENV_VAR = "TRAINING_CONFIG_PATH"
 DEFAULT_CONFIG_PATH = Path(__file__).resolve().parent / "config.yaml"
@@ -68,11 +32,6 @@ TRAIN_SAC_KWARGS = {
     "use_sde",
     "tensorboard_log",
     "save_path",
-    "checkpoint_freq",
-    "wandb_project",
-    "wandb_entity",
-    "wandb_run_name",
-    "wandb_tags",
 }
 
 
@@ -93,11 +52,6 @@ def train_sac(
     use_sde=False,
     tensorboard_log="./sac_tensorboard/",
     save_path="./sac_model",
-    checkpoint_freq=200,
-    wandb_project=None,
-    wandb_entity=None,
-    wandb_run_name=None,
-    wandb_tags=None,
 ):
     """
     Train a SAC agent on the MinimalEnv environment.
@@ -119,48 +73,7 @@ def train_sac(
         use_sde: Whether to use State Dependent Exploration
         tensorboard_log: Directory for tensorboard logs
         save_path: Path to save the trained model
-        checkpoint_freq: Frequency (in timesteps) to save checkpoints
-        wandb_project: WandB project name (optional)
-        wandb_entity: WandB entity/username (optional)
-        wandb_run_name: WandB run name (optional)
-        wandb_tags: List of tags for WandB run (optional)
     """
-
-    # Initialize WandB if project name is provided
-    callbacks = []
-    
-    # Create checkpoint directory with timestamp
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    checkpoint_dir = f"{save_path}_checkpoints_{timestamp}"
-    os.makedirs(checkpoint_dir, exist_ok=True)
-    
-    # Add checkpoint callback to save model every checkpoint_freq steps
-    checkpoint_callback = CheckpointCallback(
-        save_freq=checkpoint_freq,
-        save_path=checkpoint_dir,
-        name_prefix="sac_checkpoint",
-        save_replay_buffer=True,
-        save_vecnormalize=True,
-        verbose=1,
-    )
-    callbacks.append(checkpoint_callback)
-    print(f"Checkpoints will be saved every {checkpoint_freq} steps to {checkpoint_dir}")
-    
-    if wandb_project:
-        run = wandb.init(
-            project=wandb_project,
-            entity=wandb_entity,
-            name=wandb_run_name,
-            tags=wandb_tags,
-            sync_tensorboard=True,  # Sync TensorBoard logs
-            monitor_gym=True,       # Monitor Gym environment
-            save_code=True,         # Save code
-        )
-        callbacks.append(WandbCallback(
-            model_save_path=f"models/{run.id}",
-            verbose=2,
-        ))
-        callbacks.append(CustomMetricsCallback(verbose=1))
 
     # Create vectorized environment (parallel environments)
     print("Creating environment...")
@@ -198,7 +111,6 @@ def train_sac(
     try:
         model.learn(
             total_timesteps=total_timesteps,
-            callback=callbacks if callbacks else None,
             progress_bar=False  # Set to False to avoid tqdm/rich dependency
         )
     except KeyboardInterrupt:
@@ -208,7 +120,7 @@ def train_sac(
         print(f"Error during training: {e}")
 
     # Save the final model (even if interrupted)
-    # Use same timestamp as checkpoint directory
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     save_path_with_timestamp = f"{save_path}_{timestamp}"
 
     # Create directory if it doesn't exist
@@ -222,9 +134,6 @@ def train_sac(
     # Test the trained model
     print("\nTesting trained model...")
     test_model(model, eval_env, n_episodes=3)
-
-    if wandb_project:
-        wandb.finish()
 
     return model
 

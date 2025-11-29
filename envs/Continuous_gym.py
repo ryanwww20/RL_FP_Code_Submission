@@ -164,8 +164,7 @@ class MinimalEnv(gym.Env):
             flux_img_path = os.path.join(
                 self.log_dir, 'flux_images', f'flux_distribution_{timestamp}.png')
             self.simulation.plot_distribution(
-                output_all_flux=output_all_flux,
-                input_flux=input_flux,
+                state_flux=output_all_flux,
                 save_path=flux_img_path,
                 show_plot=False
             )
@@ -195,7 +194,7 @@ class MinimalEnv(gym.Env):
             # Initial state: return zeros
             observation = np.zeros(self.obs_size, dtype=np.float32)
 
-        # Info dictionary with custom metrics for WandB logging
+        # Info dictionary with custom metrics
         info = self._step_metrics if hasattr(self, '_step_metrics') else {}
         observation = np.append(observation, self.material_matrix_idx)
 

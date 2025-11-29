@@ -7,7 +7,7 @@ sample_img/
 simul_time_dis/
 wandb/
 
-ppo_model_logs*/
+ppo_model*/
 ppo_tensorboard*/
 sac_tensorboard*/
 sac_model_logs*/
@@ -15,8 +15,9 @@ simul_time_dis/
 playground/
 
 models/
+playground/
+archive/
 
 .DS_Store
 
 job.sh
-rl_log_*.txt
