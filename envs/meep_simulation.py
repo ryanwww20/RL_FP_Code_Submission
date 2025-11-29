@@ -63,13 +63,17 @@ class WaveguideSimulation:
         self.geometry = None
         self.sources = None
         self.sim = None
-        self.ez_data = None
         self.hz_data = None
-        self.flux = None  # Single flux monitor object
-        self.flux_regions = []  # List of flux monitors for y-axis distribution
-        self.input_flux_region = None  # Flux monitor at the input waveguide
-        self.output_flux_region_1 = None  # Flux monitor at the output waveguide 1
-        self.output_flux_region_2 = None  # Flux monitor at the output waveguide 2
+        
+        # Flux monitor regions
+        self.flux_regions = []  # State flux monitors (along y-axis)
+        self.input_flux_region = None  # Input mode flux monitor
+        self.output_flux_region_1 = None  # Output mode flux monitor 1
+        self.output_flux_region_2 = None  # Output mode flux monitor 2
+        self.design_region_flux_region_up = None
+        self.design_region_flux_region_down = None
+        self.design_region_flux_region_left = None
+        self.design_region_flux_region_right = None
         self.num_flux_regions = config.simulation.num_flux_regions
         self.simulation_time = config.simulation.simulation_time
         self.output_x = config.simulation.output_x
@@ -84,7 +88,7 @@ class WaveguideSimulation:
         self.input_flux_monitor_x = config.simulation.input_flux_monitor_x
         self.output_flux_monitor_x = config.simulation.output_flux_monitor_x
 
-    def create_geometry(self, material_matrix=None):
+    def create_geometry(self, matrix=None):
         """
         Create waveguide geometry: 1 Input (left, connected to x=-1) 
         and 2 Outputs (right, connected to x=1) 
@@ -133,13 +137,13 @@ class WaveguideSimulation:
         )
         geometry.append(output_waveguide_2)
         # --- 3. Add material distribution from matrix (Design Region) ---
-        if material_matrix is not None:
-            material_matrix = np.array(material_matrix)
+        if matrix is not None:
+            matrix = np.array(matrix)
 
-            if material_matrix.shape != (self.pixel_num_x, self.pixel_num_y):
+            if matrix.shape != (self.pixel_num_x, self.pixel_num_y):
                 # Error handling remains the same
                 raise ValueError(
-                    f"material_matrix must be {self.pixel_num_x}x{self.pixel_num_y}, got shape {material_matrix.shape}")
+                    f"matrix must be {self.pixel_num_x}x{self.pixel_num_y}, got shape {matrix.shape}")
 
             # Design region boundaries: x from -1 to 1, y from -1 to 1
             square_x_min = self.design_region_x_min  # -1.0
@@ -154,7 +158,7 @@ class WaveguideSimulation:
                     x_center = square_x_min + (i + 0.5) * dx
                     y_center = square_y_min + (j + 0.5) * dy
 
-                    if material_matrix[i, j] == 1:
+                    if matrix[i, j] == 1:
                         silicon_pixel = mp.Block(
                             center=mp.Vector3(x_center, y_center, 0),
                             size=mp.Vector3(dx, dy, 0),
@@ -180,7 +184,7 @@ class WaveguideSimulation:
         # CRITICAL: Ensure geometry is created with the current parameters
         if self.geometry is None:
             # Calling create_geometry populates the design region boundaries correctly
-            self.create_geometry(material_matrix=None)
+            self.create_geometry(matrix=None)
 
         plt.figure(figsize=(10, 5))
         ax = plt.gca()
@@ -294,29 +298,42 @@ class WaveguideSimulation:
             plt.savefig(save_path, dpi=150, bbox_inches='tight')
             plt.close()
 
-    def create_sources(self):
+    def create_source(self):
         """Create eigenmode source at left edge of input coupler"""
         # Calculate the starting point of the input waveguide (cell's left edge)
         input_coupler_start_x = self.design_region_x_min - self.input_coupler_length
 
-        sources = [mp.EigenModeSource(
-            src=mp.ContinuousSource(
-                wavelength=self.wavelength,
-                width=20
-            ),
-            # Position source at the start of the input coupler
-            center=mp.Vector3(input_coupler_start_x *
-                              self.src_pos_shift_coeff, 0.0, 0),
-            size=mp.Vector3(0, self.waveguide_width, 0),
-            eig_band=1,
-            direction=mp.NO_DIRECTION,
-            eig_kpoint=mp.Vector3(1, 0, 0),  # +X direction (rightward)
-            eig_match_freq=True
-        )]
+        # Suppress MPB solver output when creating EigenModeSource
+        old_stdout_fd = os.dup(1)
+        old_stderr_fd = os.dup(2)
+        try:
+            with open(os.devnull, 'w') as devnull:
+                os.dup2(devnull.fileno(), 1)
+                os.dup2(devnull.fileno(), 2)
+                sources = [mp.EigenModeSource(
+                    src=mp.ContinuousSource(
+                        wavelength=self.wavelength,
+                        width=20
+                    ),
+                    # Position source at the start of the input coupler
+                    center=mp.Vector3(input_coupler_start_x *
+                                      self.src_pos_shift_coeff, 0.0, 0),
+                    size=mp.Vector3(0, self.waveguide_width, 0),
+                    eig_band=1,
+                    direction=mp.NO_DIRECTION,
+                    eig_kpoint=mp.Vector3(1, 0, 0),  # +X direction (rightward)
+                    eig_match_freq=True
+                )]
+        finally:
+            os.dup2(old_stdout_fd, 1)
+            os.dup2(old_stderr_fd, 2)
+            os.close(old_stdout_fd)
+            os.close(old_stderr_fd)
+        
         self.sources = sources
         return self.sources
 
-    def create_simulation(self, add_flux_at_x=None):
+    def create_simulation(self):
         """
         Create Meep simulation object
 
@@ -326,7 +343,7 @@ class WaveguideSimulation:
         if self.geometry is None:
             self.create_geometry()
         if self.sources is None:
-            self.create_sources()
+            self.create_source()
 
         # Suppress Meep's verbose structure initialization output
         # Meep writes directly to file descriptors, so we need to redirect at OS level
@@ -364,42 +381,10 @@ class WaveguideSimulation:
             except:
                 pass
 
-        # Add flux monitor if requested
-        if add_flux_at_x is not None:
-            self.add_flux_monitor(add_flux_at_x)
 
         return self.sim
 
-    def add_flux_monitor(self, height=None):
-        """
-        Add flux monitor at a specific x position
-
-        Args:
-            x_position: x coordinate in microns where to measure flux
-            height: height of flux region in y-direction (default: full cell height)
-        """
-        if self.sim is None:
-            raise ValueError(
-                "Simulation must be created first. Call create_simulation() method.")
-
-        if height is None:
-            height = self.cell_size.y  # Full height of cell
-
-        # Calculate frequency from wavelength
-        frequency = 1.0 / self.wavelength
-
-        # Create flux region at x_position
-        flux_region = mp.FluxRegion(
-            center=mp.Vector3(self.output_x, 0, 0),
-            size=mp.Vector3(0, height, 0)  # Vertical line at x_position
-        )
-
-        # Add flux monitor to simulation
-        self.flux = self.sim.add_flux(frequency, 0, 1, flux_region)
-
-        return self.flux
-
-    def add_flux_monitors_along_y(self, region_height=None):
+    def add_flux_monitor_state(self, region_height=None):
         """
         Add multiple flux monitors along y-axis at a specific x position
 
@@ -442,9 +427,9 @@ class WaveguideSimulation:
         self.flux_regions = flux_monitors
         return flux_monitors
 
-    def add_input_flux_monitor(self):
+    def add_flux_monitor_input_mode(self):
         """
-        Add flux monitor at the input waveguide
+        Add flux monitor at the input waveguide for mode analysis
         """
 
         frequency = 1.0 / self.wavelength
@@ -460,9 +445,9 @@ class WaveguideSimulation:
             frequency, 0, 1, self.input_flux_region)
         return self.input_flux_region
 
-    def add_output_flux_monitors(self):
+    def add_flux_monitor_output_mode(self):
         """
-        Add flux monitors at the output waveguides
+        Add flux monitors at the output waveguides for mode analysis
         """
         frequency = 1.0 / self.wavelength
         if self.sim is None:
@@ -485,9 +470,9 @@ class WaveguideSimulation:
             frequency, 0, 1, self.output_flux_region_2)
         return self.output_flux_region_1, self.output_flux_region_2
 
-    def add_design_region_flux_monitor(self):
+    def add_flux_monitor_rectangle(self):
         """
-        Add flux monitor at the design region
+        Add flux monitors at the design region boundaries (rectangle)
         """
         frequency = 1.0 / self.wavelength
         if self.sim is None:
@@ -522,20 +507,18 @@ class WaveguideSimulation:
             frequency, 0, 1, self.design_region_flux_region_right)
         return self.design_region_flux_region_up, self.design_region_flux_region_down, self.design_region_flux_region_left, self.design_region_flux_region_right
 
-    def get_flux_distribution_along_y(self):
+    def get_flux_state(self):
         """
-        Get flux values for all y-axis flux monitors
+        Get flux values for all state flux monitors (along y-axis)
 
         Returns:
-            y_positions: array of y coordinates
             flux_values: array of flux values at each y position
         """
         if not self.flux_regions:
             raise ValueError(
-                "No flux regions along y-axis. Call add_flux_monitors_along_y() first.")
+                "No flux regions. Call add_flux_monitor_state() first.")
 
         # Get flux values for all monitors
-        # mp.get_fluxes returns a list/array, typically [flux_value] for single frequency
         flux_values = []
         for flux_monitor in self.flux_regions:
             fluxes = mp.get_fluxes(flux_monitor)
@@ -546,30 +529,11 @@ class WaveguideSimulation:
                 flux_value = fluxes
             flux_values.append(flux_value)
 
-        flux_values = np.array(flux_values)
+        return np.array(flux_values)
 
-        # Calculate y positions
-        y_min = -self.cell_size.y / 2
-        y_max = self.cell_size.y / 2
-        num_regions = len(self.flux_regions)
-        region_height = self.cell_size.y / num_regions
-        y_positions = np.linspace(
-            y_min + region_height/2, y_max - region_height/2, num_regions)
-
-        return y_positions, flux_values
-
-    def get_input_flux_value(self):
+    def get_flux_input_mode(self, band_num=1):
         """
-        Get flux value at the input waveguide
-        """
-        if self.input_flux_region is None:
-            raise ValueError(
-                "No flux monitor added. Call add_flux_monitor() first.")
-        return mp.get_fluxes(self.input_flux_region)[0]
-
-    def get_input_mode_coefficient(self, band_num=1):
-        """
-        Get mode coefficient (power) at input waveguide using eigenmode expansion.
+        Get input mode coefficient (power) using eigenmode expansion.
         
         Args:
             band_num: The mode band number (1 = fundamental mode TE0)
@@ -582,15 +546,26 @@ class WaveguideSimulation:
                 "Simulation must be run first. Call run() method.")
         if self.input_flux_region is None:
             raise ValueError(
-                "No input flux monitor added. Call add_input_flux_monitor() first.")
+                "No input flux monitor added. Call add_flux_monitor_input_mode() first.")
         
-        # Get eigenmode coefficients at input
-        res = self.sim.get_eigenmode_coefficients(
-            self.input_flux_region, 
-            [band_num],
-            eig_parity=mp.NO_PARITY,
-            direction=mp.X
-        )
+        # Get eigenmode coefficients at input (suppress MPB output)
+        old_stdout_fd = os.dup(1)
+        old_stderr_fd = os.dup(2)
+        try:
+            with open(os.devnull, 'w') as devnull:
+                os.dup2(devnull.fileno(), 1)
+                os.dup2(devnull.fileno(), 2)
+                res = self.sim.get_eigenmode_coefficients(
+                    self.input_flux_region, 
+                    [band_num],
+                    eig_parity=mp.NO_PARITY,
+                    direction=mp.X
+                )
+        finally:
+            os.dup2(old_stdout_fd, 1)
+            os.dup2(old_stderr_fd, 2)
+            os.close(old_stdout_fd)
+            os.close(old_stderr_fd)
         
         # alpha[band_idx, freq_idx, direction_idx]
         # direction_idx=0 for forward (+X direction)
@@ -601,96 +576,72 @@ class WaveguideSimulation:
         
         return mode_power
 
-    def get_output_flux_values_1(self):
+    def get_flux_output_mode(self, band_num=1):
         """
-        Get flux values at the output waveguides
-        """
-        if self.output_flux_region_1 is None:
-            raise ValueError(
-                "No output flux monitors added. Call add_output_flux_monitors() first.")
-        return mp.get_fluxes(self.output_flux_region_1)[0]
-
-    def get_output_flux_values_2(self):
-        """
-        Get flux values at the output waveguides
-        """
-        if self.output_flux_region_2 is None:
-            raise ValueError(
-                "No output flux monitors added. Call add_output_flux_monitors() first.")
-        return mp.get_fluxes(self.output_flux_region_2)[0]
-
-    def get_output_mode_coefficient_1(self, band_num=1):
-        """
-        Get mode coefficient (transmission) at output waveguide 1 using eigenmode expansion.
+        Get output mode coefficients (transmission) for both output waveguides.
         
         Args:
             band_num: The mode band number (1 = fundamental mode TE0)
             
         Returns:
-            Mode transmission power (|alpha|^2) for the specified mode
+            (mode_1, mode_2): Tuple of mode transmission powers (|alpha|^2) for output 1 and 2
         """
         if self.sim is None:
             raise ValueError(
                 "Simulation must be run first. Call run() method.")
-        if self.output_flux_region_1 is None:
+        if self.output_flux_region_1 is None or self.output_flux_region_2 is None:
             raise ValueError(
-                "No output flux monitors added. Call add_output_flux_monitors() first.")
+                "No output flux monitors added. Call add_flux_monitor_output_mode() first.")
         
-        # Get eigenmode coefficients
-        # Returns EigenmodeData with alpha array of shape (num_bands, num_freqs, 2)
-        # The last dimension is [forward, backward] coefficients
-        res = self.sim.get_eigenmode_coefficients(
-            self.output_flux_region_1, 
-            [band_num],
-            eig_parity=mp.NO_PARITY,
-            direction=mp.X
-        )
+        # Get eigenmode coefficients for output 1 and 2 (suppress MPB output)
+        old_stdout_fd = os.dup(1)
+        old_stderr_fd = os.dup(2)
+        try:
+            with open(os.devnull, 'w') as devnull:
+                os.dup2(devnull.fileno(), 1)
+                os.dup2(devnull.fileno(), 2)
+                res1 = self.sim.get_eigenmode_coefficients(
+                    self.output_flux_region_1, 
+                    [band_num],
+                    eig_parity=mp.NO_PARITY,
+                    direction=mp.X
+                )
+                res2 = self.sim.get_eigenmode_coefficients(
+                    self.output_flux_region_2, 
+                    [band_num],
+                    eig_parity=mp.NO_PARITY,
+                    direction=mp.X
+                )
+        finally:
+            os.dup2(old_stdout_fd, 1)
+            os.dup2(old_stderr_fd, 2)
+            os.close(old_stdout_fd)
+            os.close(old_stderr_fd)
         
-        # alpha[band_idx, freq_idx, direction_idx]
-        # band_idx=0 for first band, freq_idx=0 for single frequency, direction_idx=0 for forward
-        alpha_forward = res.alpha[0, 0, 0]
+        alpha_forward_1 = res1.alpha[0, 0, 0]
+        mode_transmission_1 = np.abs(alpha_forward_1) ** 2
+        alpha_forward_2 = res2.alpha[0, 0, 0]
+        mode_transmission_2 = np.abs(alpha_forward_2) ** 2
         
-        # Mode transmission = |alpha|^2
-        mode_transmission = np.abs(alpha_forward) ** 2
-        
-        return mode_transmission
+        return mode_transmission_1, mode_transmission_2
 
-    def get_output_mode_coefficient_2(self, band_num=1):
+    def get_flux_rectangle(self):
         """
-        Get mode coefficient (transmission) at output waveguide 2 using eigenmode expansion.
+        Get flux values at the design region rectangle boundaries.
         
-        Args:
-            band_num: The mode band number (1 = fundamental mode TE0)
-            
         Returns:
-            Mode transmission power (|alpha|^2) for the specified mode
+            (up, down, left, right): Tuple of flux values at the four boundaries
         """
-        if self.sim is None:
+        if self.design_region_flux_region_up is None:
             raise ValueError(
-                "Simulation must be run first. Call run() method.")
-        if self.output_flux_region_2 is None:
-            raise ValueError(
-                "No output flux monitors added. Call add_output_flux_monitors() first.")
+                "No rectangle flux monitors added. Call add_flux_monitor_rectangle() first.")
         
-        # Get eigenmode coefficients
-        res = self.sim.get_eigenmode_coefficients(
-            self.output_flux_region_2, 
-            [band_num],
-            eig_parity=mp.NO_PARITY,
-            direction=mp.X
+        return (
+            mp.get_fluxes(self.design_region_flux_region_up)[0],
+            mp.get_fluxes(self.design_region_flux_region_down)[0],
+            mp.get_fluxes(self.design_region_flux_region_left)[0],
+            mp.get_fluxes(self.design_region_flux_region_right)[0]
         )
-        
-        # alpha[band_idx, freq_idx, direction_idx]
-        alpha_forward = res.alpha[0, 0, 0]
-        
-        # Mode transmission = |alpha|^2
-        mode_transmission = np.abs(alpha_forward) ** 2
-        
-        return mode_transmission
-
-    def get_design_region_flux_value(self):
-
-        return mp.get_fluxes(self.design_region_flux_region_up)[0], mp.get_fluxes(self.design_region_flux_region_down)[0], mp.get_fluxes(self.design_region_flux_region_left)[0], mp.get_fluxes(self.design_region_flux_region_right)[0]
 
     def run(self):
         """Run the simulation"""
@@ -702,23 +653,6 @@ class WaveguideSimulation:
                 self.sim.run(until=self.simulation_time)
         # self.plot_design(save_path=None, show_plot=False)
         return self.sim
-
-    def get_ezfield_data(self):
-        """Get electric field data from simulation"""
-        if self.sim is None:
-            raise ValueError(
-                "Simulation must be run first. Call run() method.")
-
-        # Get field data
-        ez_data = self.sim.get_array(
-            center=mp.Vector3(0, 0, 0),
-            size=self.cell_size,
-            component=mp.Ez
-        )
-
-        # Transpose so indexing matches coordinate system: ez_data[x_idx, y_idx]
-        self.ez_data = ez_data.T
-        return self.ez_data
 
     def get_hzfield_data(self):
         """Get electric field data from simulation"""
@@ -737,7 +671,27 @@ class WaveguideSimulation:
         self.hz_data = hz_data.T
         return self.hz_data
 
-    def plot_design(self, material_matrix=None, save_path=None, show_plot=True):
+    def get_output_transmission(self, band_num=1):
+        """
+        Calculate transmission ratios for output modes.
+        
+        Args:
+            band_num: The mode band number (1 = fundamental mode TE0)
+            
+        Returns:
+            (transmission_1, transmission_2, total_transmission): 
+            Transmission ratios relative to input mode
+        """
+        input_mode = self.get_flux_input_mode(band_num)
+        output_mode_1, output_mode_2 = self.get_flux_output_mode(band_num)
+        
+        transmission_1 = output_mode_1 / input_mode if input_mode > 0 else 0.0
+        transmission_2 = output_mode_2 / input_mode if input_mode > 0 else 0.0
+        total_transmission = transmission_1 + transmission_2
+        
+        return transmission_1, transmission_2, total_transmission
+
+    def plot_design(self, matrix=None, save_path=None, show_plot=True):
         """
         Plot and visualize the simulation results (Ez field + geometry overlays).
         This version includes input/output waveguides and the output measurement plane.
@@ -748,9 +702,6 @@ class WaveguideSimulation:
             save_path: Path to save the plot
             show_plot: Whether to display the plot
         """
-        if self.ez_data is None:
-            self.get_ezfield_data()
-
         if self.hz_data is None:
             self.get_hzfield_data()
 
@@ -780,9 +731,9 @@ class WaveguideSimulation:
         # --- 0. Overlay Material Matrix (if provided) ---
         silicon_label_added = False
         silica_label_added = False
-        if material_matrix is not None:
-            material_matrix = np.array(material_matrix)
-            if material_matrix.shape == (self.pixel_num_x, self.pixel_num_y):
+        if matrix is not None:
+            matrix = np.array(matrix)
+            if matrix.shape == (self.pixel_num_x, self.pixel_num_y):
                 square_x_min = self.design_region_x_min  # -1.0
                 square_y_min = self.design_region_y_min  # -1.0
                 dx = self.pixel_size
@@ -795,7 +746,7 @@ class WaveguideSimulation:
                         x_left = square_x_min + i * dx
                         y_bottom = square_y_min + j * dy
 
-                        if material_matrix[i, j] == 1:
+                        if matrix[i, j] == 1:
                             # Silicon - darker grey
                             ax.add_patch(Rectangle(
                                 (x_left, y_bottom), dx, dy,
@@ -906,7 +857,7 @@ class WaveguideSimulation:
         else:
             plt.close()
 
-    def plot_distribution(self, output_all_flux, input_flux, save_path=None, show_plot=True):
+    def plot_distribution(self, state_flux, input_flux, save_path=None, show_plot=True):
         """
         Plot the flux distribution along the output plane.
 
@@ -916,7 +867,7 @@ class WaveguideSimulation:
             show_plot: Whether to display the plot
         """
         plt.figure(figsize=(10, 6))
-        plt.plot(output_all_flux/input_flux, 'b-',
+        plt.plot(state_flux/input_flux, 'b-',
                  linewidth=2, label='Flux Distribution')
         plt.xlabel('Detector Index')
         plt.ylabel('Flux Ratio (Output/Input)')
@@ -942,108 +893,74 @@ class WaveguideSimulation:
         else:
             plt.close()
 
-    def calculate_flux(self, material_matrix, output_plane_x=None):
-
-        if output_plane_x is not None:
-            self.output_x = output_plane_x
-
+    def calculate_flux(self, matrix):
+        """
+        Complete simulation workflow: create geometry, run simulation, and get all results.
+        
+        Args:
+            matrix: Material matrix (pixel_num_x x pixel_num_y), 1=silicon, 0=silica
+            
+        Returns:
+            (input_flux, output_flux_1, output_flux_2, state_flux, hz_data, 
+             input_mode, output_mode_1, output_mode_2)
+        """
         # Create geometry with material matrix
-        self.create_geometry(material_matrix=material_matrix)
+        self.create_geometry(matrix=matrix)
 
         # Create simulation and add flux monitors
         self.create_simulation()
-        self.add_flux_monitors_along_y()
-        self.add_input_flux_monitor()
-        self.add_output_flux_monitors()
+        self.add_flux_monitor_state()
+        self.add_flux_monitor_input_mode()
+        self.add_flux_monitor_output_mode()
 
         # Run simulation
         self.run()
 
-        # Get flux distribution
-        _, output_all_flux = self.get_flux_distribution_along_y()
-        input_flux_value = self.get_input_flux_value()
-        output_flux_value_1 = self.get_output_flux_values_1()
-        output_flux_value_2 = self.get_output_flux_values_2()
+        # Get flux state (distribution along y-axis)
+        state_flux = self.get_flux_state()
+        
+        # Get input and output flux values (raw flux, not mode coefficients)
+        input_flux_value = mp.get_fluxes(self.input_flux_region)[0]
+        output_flux_value_1 = mp.get_fluxes(self.output_flux_region_1)[0]
+        output_flux_value_2 = mp.get_fluxes(self.output_flux_region_2)[0]
         
         # Get mode coefficients (fundamental mode transmission)
-        input_mode = self.get_input_mode_coefficient(band_num=1)
-        output_mode_1 = self.get_output_mode_coefficient_1(band_num=1)
-        output_mode_2 = self.get_output_mode_coefficient_2(band_num=1)
+        input_mode = self.get_flux_input_mode(band_num=1)
+        output_mode_1, output_mode_2 = self.get_flux_output_mode(band_num=1)
 
         # Get field data
         hz_data = self.get_hzfield_data()
 
-        return input_flux_value, output_flux_value_1, output_flux_value_2, output_all_flux, hz_data, input_mode, output_mode_1, output_mode_2
+        return input_flux_value, output_flux_value_1, output_flux_value_2, state_flux, hz_data, input_mode, output_mode_1, output_mode_2
 
 
 if __name__ == "__main__":
-    start = time.time()
-    # Example 1: Standard centered setup
-    calculator_A = WaveguideSimulation()
-
-    # Create a simple test matrix
-    material_matrix = np.ones((20, 20))
-    # material_matrix[19, :] = 0
-    # material_matrix[18, :] = 0
-    # material_matrix[17, :] = 0
-    # material_matrix[25, :] = 0
-
-    # Apply the geometry
-    calculator_A.create_geometry(material_matrix=material_matrix)
-
-    # Plot to verify the new centering and lengths
-    print("Plotting Centered Geometry (Design at x=[-1, 1])")
-    calculator_A.plot_geometry(
-        show_plot=False,
-        save_path='sample_img/geometry_plot.png',  # Provide a file name here
-        x_range=(-3.0, 3.0),
-        y_range=(-2, 2)
-    )
-
-    # Example 2: Run a quick simulation test with the new geometry
-    calculator_A.create_simulation()
-
-    # Since the outputs are separated, define flux monitor location at x=2.5
-    calculator_A.add_flux_monitors_along_y()  # Add monitors to measure flux split
-    calculator_A.add_input_flux_monitor()
-    calculator_A.add_output_flux_monitors()
-    calculator_A.add_design_region_flux_monitor()
-
-    print("\nRunning simulation with centered geometry...")
-    calculator_A.run()
-    print("output_x", calculator_A.output_x)
-    calculator_A.plot_design(
-        material_matrix=material_matrix,
-        show_plot=False,
-        save_path='sample_img/meep_simulation_hz_field.png'  # Provide a file name here
-    )
-
-    # Get total flux
-    _, flux_values = calculator_A.get_flux_distribution_along_y()
-    print(f"Total flux measured: {np.sum(flux_values):.4e}")
-    # get input flux
-    input_flux = calculator_A.get_input_flux_value()
-    calculator_A.plot_distribution(
-        output_all_flux=flux_values,
-        input_flux=input_flux,
-        show_plot=False,
-        save_path='sample_img/flux_distribution.png'  # Provide a file name here
-    )
-
-    design_region_flux_value_up, design_region_flux_value_down, design_region_flux_value_left, design_region_flux_value_right = calculator_A.get_design_region_flux_value()
-    print(f"Design region flux value up: {design_region_flux_value_up:.4e}")
-    print(
-        f"Design region flux value down: {design_region_flux_value_down:.4e}")
-    print(
-        f"Design region flux value left: {design_region_flux_value_left:.4e}")
-    print(
-        f"Design region flux value right: {design_region_flux_value_right:.4e}")
-
-    output_flux_value_1 = calculator_A.get_output_flux_values_1()
-    output_flux_value_2 = calculator_A.get_output_flux_values_2()
-    print(f"Input flux: {input_flux:.4e}")
-    print(f"Output flux value 1: {output_flux_value_1:.4e}")
-    print(f"Output flux value 2: {output_flux_value_2:.4e}")
-
-    end = time.time()       # Record end time
-    print("Time elapsed:", end - start, "seconds")
+    """
+    Simplest usage example:
+    1. Create simulation instance
+    2. Define material matrix (design)
+    3. Run calculate_flux() to get results
+    """
+    # 1. Create simulation instance
+    sim = WaveguideSimulation()
+    
+    # 2. Define material matrix (50x50 pixels, all silicon for this example)
+    # 1 = silicon, 0 = silica
+    matrix = np.ones((sim.pixel_num_x, sim.pixel_num_y))
+    
+    # Optional: Create a simple pattern (e.g., a vertical line of silica)
+    # matrix[sim.pixel_num_x // 2, :] = 0
+    
+    # 3. Run simulation and get results
+    results = sim.calculate_flux(matrix)
+    input_flux, output_flux_1, output_flux_2, state_flux, hz_data, input_mode, output_mode_1, output_mode_2 = results
+    
+    # 4. Display results
+    trans_1, trans_2, total_trans = sim.get_output_transmission(band_num=1)
+    print(f"Transmission: Output1={trans_1*100:.1f}%, Output2={trans_2*100:.1f}%, Total={total_trans*100:.1f}%")
+    
+    # Optional: Plot results
+    sim.plot_design(matrix=matrix, show_plot=False, 
+                   save_path='sample_img/field_result.png')
+    sim.plot_distribution(state_flux=state_flux, input_flux=input_flux,
+                         save_path='sample_img/flux_distribution.png', show_plot=False)

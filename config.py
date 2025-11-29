@@ -34,7 +34,6 @@ class EnvironmentConfig:
     obs_size: int
     action_size: int
     max_steps: int
-    target_flux: dict
 
 # @dataclass 
 # class TrainingConfig:
