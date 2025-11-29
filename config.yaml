@@ -4,18 +4,14 @@ paths:
   flux_dir: ${paths.logs_root}/flux_images
   field_dir: ${paths.logs_root}/field_images
 
-state_dim: &state_dim 101
-state_dim_minus_1: &state_dim_minus_1 100
+state_dim: &state_dim 81
+state_dim_minus_1: &state_dim_minus_1 80
 
 environment:
   obs_size: *state_dim
   action_size: 20
   max_steps: 20
-  target_flux:
-    baseline: -1.0
-    segments:
-      - { start: 20, end: 40, value: 2.0 }
-      - { start: 60, end: 80, value: 2.0 }
+
 
 simulation:
   resolution: 20
