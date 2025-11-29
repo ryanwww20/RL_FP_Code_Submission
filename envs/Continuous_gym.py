@@ -194,7 +194,7 @@ class MinimalEnv(gym.Env):
             # Initial state: return zeros
             observation = np.zeros(self.obs_size, dtype=np.float32)
 
-        # Info dictionary with custom metrics for WandB logging
+        # Info dictionary with custom metrics
         info = self._step_metrics if hasattr(self, '_step_metrics') else {}
         observation = np.append(observation, self.material_matrix_idx)
 

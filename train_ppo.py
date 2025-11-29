@@ -9,45 +9,9 @@ from pathlib import Path
 from datetime import datetime
 
 import yaml
-import wandb
-from wandb.integration.sb3 import WandbCallback
 from stable_baselines3 import PPO
 from stable_baselines3.common.env_util import make_vec_env, SubprocVecEnv
-from stable_baselines3.common.callbacks import BaseCallback, CheckpointCallback
 from envs.Discrete_gym import MinimalEnv
-
-
-class CustomMetricsCallback(BaseCallback):
-    """
-    Custom callback to log environment-specific metrics to WandB.
-    Logs every step for detailed tracking.
-    """
-    def __init__(self, verbose=0):
-        super().__init__(verbose)
-        self.metric_keys = [
-            "total_transmission",
-            "transmission_score",
-            "balance_score",
-            "current_score",
-            "output_flux_1_ratio",
-            "output_flux_2_ratio",
-            "loss_ratio",
-        ]
-
-    def _on_step(self) -> bool:
-        # Get info from the environment
-        infos = self.locals.get("infos", [])
-        for info in infos:
-            metrics_to_log = {}
-            for key in self.metric_keys:
-                if key in info:
-                    metrics_to_log[f"env/{key}"] = info[key]
-            
-            # Log immediately if we have metrics
-            if metrics_to_log:
-                wandb.log(metrics_to_log, step=self.num_timesteps)
-
-        return True
 
 CONFIG_ENV_VAR = "TRAINING_CONFIG_PATH"
 DEFAULT_CONFIG_PATH = Path(__file__).resolve().parent / "config.yaml"
@@ -66,54 +30,7 @@ TRAIN_PPO_KWARGS = {
     "max_grad_norm",
     "tensorboard_log",
     "save_path",
-    "checkpoint_freq",
-    "wandb_project",
-    "wandb_entity",
-    "wandb_run_name",
-    "wandb_tags",
 }
-
-
-class ProgressCallback(BaseCallback):
-    """
-    Custom callback to print training progress including rollout and epoch information.
-    """
-    def __init__(self, verbose=1, print_interval=1):
-        super(ProgressCallback, self).__init__(verbose)
-        self.rollout_count = 0
-        self.print_interval = print_interval
-        self.n_epochs = None
-        
-    def _on_step(self) -> bool:
-        return True
-    
-    def _on_rollout_start(self) -> None:
-        """Called when a new rollout collection starts."""
-        if self.rollout_count % self.print_interval == 0:
-            print(f"\n[Rollout {self.rollout_count + 1}] Collecting rollout data...")
-    
-    def _on_rollout_end(self) -> None:
-        """Called when rollout collection ends and training update begins."""
-        self.rollout_count += 1
-        if self.rollout_count % self.print_interval == 0:
-            num_timesteps = self.num_timesteps
-            if self.n_epochs is None and hasattr(self.model, 'n_epochs'):
-                self.n_epochs = self.model.n_epochs
-            epoch_info = f" (n_epochs={self.n_epochs})" if self.n_epochs else ""
-            print(f"[Rollout {self.rollout_count}] Timesteps: {num_timesteps}{epoch_info} | Starting training update...")
-    
-    def _on_training_start(self) -> None:
-        """Called when training starts."""
-        print("Training started!")
-        if hasattr(self.model, 'n_steps'):
-            print(f"Rollout length: {self.model.n_steps} steps")
-        if hasattr(self.model, 'n_epochs'):
-            self.n_epochs = self.model.n_epochs
-            print(f"Epochs per update: {self.model.n_epochs}")
-    
-    def _on_training_end(self) -> None:
-        """Called when training ends."""
-        print(f"\nTraining complete! Total rollouts: {self.rollout_count}")
 
 
 def train_ppo(
@@ -131,11 +48,6 @@ def train_ppo(
     max_grad_norm=0.5,
     tensorboard_log="./ppo_tensorboard/",
     save_path="./ppo_model",
-    checkpoint_freq=200,
-    wandb_project=None,
-    wandb_entity=None,
-    wandb_run_name=None,
-    wandb_tags=None,
 ):
     """
     Train a PPO agent on the MinimalEnv environment.
@@ -155,48 +67,9 @@ def train_ppo(
         max_grad_norm: Maximum gradient norm for clipping
         tensorboard_log: Directory for tensorboard logs
         save_path: Path to save the trained model
-        checkpoint_freq: Frequency (in timesteps) to save checkpoints
-        wandb_project: WandB project name (optional)
-        wandb_entity: WandB entity/username (optional)
-        wandb_run_name: WandB run name (optional)
-        wandb_tags: List of tags for WandB run (optional)
     """
-
-    # Initialize WandB if project name is provided
-    callbacks = []
-    
-    # Create checkpoint directory with timestamp
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    checkpoint_dir = f"{save_path}_checkpoints_{timestamp}"
-    os.makedirs(checkpoint_dir, exist_ok=True)
-    
-    # Add checkpoint callback to save model every checkpoint_freq steps
-    checkpoint_callback = CheckpointCallback(
-        save_freq=checkpoint_freq,
-        save_path=checkpoint_dir,
-        name_prefix="ppo_checkpoint",
-        save_replay_buffer=False,
-        save_vecnormalize=True,
-        verbose=1,
-    )
-    callbacks.append(checkpoint_callback)
-    print(f"Checkpoints will be saved every {checkpoint_freq} steps to {checkpoint_dir}")
-    
-    if wandb_project:
-        run = wandb.init(
-            project=wandb_project,
-            entity=wandb_entity,
-            name=wandb_run_name,
-            tags=wandb_tags,
-            sync_tensorboard=True,  # Sync TensorBoard logs
-            monitor_gym=True,       # Monitor Gym environment
-            save_code=True,         # Save code
-        )
-        callbacks.append(WandbCallback(
-            model_save_path=f"models/{run.id}",
-            verbose=2,
-        ))
-        callbacks.append(CustomMetricsCallback(verbose=1))
+    # Save starting timestamp for model saving
+    start_timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 
     # Create vectorized environment (parallel environments)
     print("Creating environment...")
@@ -226,16 +99,12 @@ def train_ppo(
         verbose=1
     )
 
-    # Create progress callback
-    progress_callback = ProgressCallback(verbose=1)
-    
     # Train the model
     print(f"Training PPO agent for {total_timesteps} timesteps...")
     print("Press Ctrl+C to interrupt training and save current model...")
     try:
         model.learn(
             total_timesteps=total_timesteps,
-            callback=callbacks if callbacks else None,
             progress_bar=False  # Set to False to avoid tqdm/rich dependency
         )
     except KeyboardInterrupt:
@@ -245,13 +114,11 @@ def train_ppo(
         print(f"Error during training: {e}")
 
     # Save the final model (even if interrupted)
-    # Use same timestamp as checkpoint directory
-    save_path_with_timestamp = f"{save_path}_{timestamp}"
+    # Use starting timestamp for consistent naming
+    save_path_with_timestamp = f"models/ppo_model_{start_timestamp}.zip"
 
-    # Create directory if it doesn't exist
-    save_dir = os.path.dirname(save_path_with_timestamp)
-    if save_dir and not os.path.exists(save_dir):
-        os.makedirs(save_dir, exist_ok=True)
+    # Create models directory if it doesn't exist
+    os.makedirs("models", exist_ok=True)
 
     model.save(save_path_with_timestamp)
     print(f"Model saved to {save_path_with_timestamp}")
@@ -259,9 +126,6 @@ def train_ppo(
     # Test the trained model
     print("\nTesting trained model...")
     test_model(model, eval_env, n_episodes=3)
-
-    if wandb_project:
-        wandb.finish()
 
     return model
 
