@@ -156,3 +156,53 @@ class MinimalEnv(gym.Env):
         }
 
         return current_score, reward
+
+    def get_current_metrics(self):
+        """
+        Get current metrics for callback logging.
+        Returns serializable data that can be passed across processes.
+        """
+        # Get current efield_state
+        _, _, _, efield_state, _, _, _, _ = self.simulation.calculate_flux(self.material_matrix)
+        
+        # Get transmission values
+        transmission_1, transmission_2, total_transmission, diff_transmission = \
+            self.simulation.get_output_transmission(band_num=1)
+        
+        # Calculate balance score
+        if total_transmission > 0:
+            diff_ratio = diff_transmission / total_transmission
+        else:
+            diff_ratio = 1.0
+        balance_score = max(1 - diff_ratio, 0)
+        
+        # Calculate score
+        transmission_score = min(max(total_transmission, 0), 1)
+        current_score = transmission_score * balance_score
+        
+        return {
+            'material_matrix': self.material_matrix.copy(),
+            'efield_state': efield_state,
+            'total_transmission': total_transmission,
+            'transmission_1': transmission_1,
+            'transmission_2': transmission_2,
+            'balance_score': balance_score,
+            'current_score': current_score,
+        }
+
+    def save_design_plot(self, save_path):
+        """Save design plot to file (called from subprocess)."""
+        self.simulation.plot_design(
+            matrix=self.material_matrix,
+            save_path=save_path,
+            show_plot=False
+        )
+
+    def save_distribution_plot(self, save_path):
+        """Save distribution plot to file (called from subprocess)."""
+        _, _, _, efield_state, _, _, _, _ = self.simulation.calculate_flux(self.material_matrix)
+        self.simulation.plot_distribution(
+            efield_state=efield_state,
+            save_path=save_path,
+            show_plot=False
+        )

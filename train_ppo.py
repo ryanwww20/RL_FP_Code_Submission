@@ -12,7 +12,7 @@ import yaml
 import pandas as pd
 import matplotlib.pyplot as plt
 from stable_baselines3 import PPO
-from stable_baselines3.common.env_util import make_vec_env, DummyVecEnv
+from stable_baselines3.common.env_util import make_vec_env, DummyVecEnv, SubprocVecEnv
 from stable_baselines3.common.callbacks import BaseCallback
 from envs.Discrete_gym import MinimalEnv
 from PIL import Image
@@ -81,82 +81,71 @@ class TrainingCallback(BaseCallback):
         # Get environment from training_env
         env = self.training_env
         
-        # Get environment attributes (works with DummyVecEnv)
+        # Get metrics from ALL environments (works with both DummyVecEnv and SubprocVecEnv)
         try:
             if hasattr(env, 'envs'):
-                # Vectorized environment - get first environment (DummyVecEnv)
-                unwrapped_env = env.envs[0].unwrapped
-                material_matrix = unwrapped_env.material_matrix.copy()
-                simulation = unwrapped_env.simulation
+                # DummyVecEnv - get metrics from all environments directly
+                all_metrics = [e.unwrapped.get_current_metrics() for e in env.envs]
             else:
-                # Single environment
-                unwrapped_env = env.unwrapped
-                material_matrix = unwrapped_env.material_matrix.copy()
-                simulation = unwrapped_env.simulation
+                # SubprocVecEnv - call on ALL environments (no indices parameter)
+                all_metrics = env.env_method('get_current_metrics')
+            
+            # Calculate average across all environments
+            n_envs = len(all_metrics)
+            avg_transmission = sum(m['total_transmission'] for m in all_metrics) / n_envs
+            avg_balance = sum(m['balance_score'] for m in all_metrics) / n_envs
+            avg_score = sum(m['current_score'] for m in all_metrics) / n_envs
+            
+            # For plotting, use the first environment's data (as representative)
+            material_matrix = all_metrics[0]['material_matrix']
+            efield_state = all_metrics[0]['efield_state']
+            
         except Exception as e:
             print(f"Warning: Could not access environment attributes: {e}")
             return
         
-        # Try to get metrics from rollout buffer or recalculate
-        try:
-            # Recalculate to get current state and metrics
-            _, _, _, efield_state, _, _, _, _ = simulation.calculate_flux(material_matrix)
-            transmission_1, transmission_2, total_transmission, _ = simulation.get_output_transmission(band_num=1)
-            
-            # Calculate balance score
-            if total_transmission > 0:
-                diff_ratio = abs(transmission_1 - transmission_2) / total_transmission
-            else:
-                diff_ratio = 1.0
-            balance_score = max(1 - diff_ratio, 0)
-            
-            # Calculate score (same as in get_reward)
-            transmission_score = min(max(total_transmission, 0), 1)
-            current_score = transmission_score * balance_score
-            
-            # Get reward from rollout statistics if available
-            reward = 0.0
-            if hasattr(self, 'logger') and self.logger.name_to_value:
-                # Try to get mean reward from logger
-                if 'rollout/ep_rew_mean' in self.logger.name_to_value:
-                    reward = self.logger.name_to_value['rollout/ep_rew_mean']
-            
-        except Exception as e:
-            print(f"Warning: Could not get metrics: {e}")
-            total_transmission = 0.0
-            balance_score = 0.0
-            current_score = 0.0
-            reward = 0.0
-            efield_state = None
+        # Get reward from rollout statistics if available
+        reward = 0.0
+        if hasattr(self, 'logger') and self.logger.name_to_value:
+            if 'rollout/ep_rew_mean' in self.logger.name_to_value:
+                reward = self.logger.name_to_value['rollout/ep_rew_mean']
         
-        # Record metrics to CSV
+        # Record AVERAGE metrics to CSV
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         with open(self.csv_path, 'a') as f:
-            f.write(f'{timestamp},{self.rollout_count},{total_transmission},{balance_score},{current_score},{reward}\n')
+            f.write(f'{timestamp},{self.rollout_count},{avg_transmission},{avg_balance},{avg_score},{reward}\n')
         
-        # Plot and save design
-        if material_matrix is not None:
-            design_path = self.design_dir / f"design_rollout_{self.rollout_count:04d}.png"
-            self.design_image_paths.append(str(design_path))
-            simulation.plot_design(
-                matrix=material_matrix,
-                save_path=str(design_path),
-                show_plot=False
-            )
+        # Plot and save design (use first environment as representative)
+        design_path = self.design_dir / f"design_rollout_{self.rollout_count:04d}.png"
+        self.design_image_paths.append(str(design_path))
+        try:
+            if hasattr(env, 'envs'):
+                # DummyVecEnv - direct call
+                env.envs[0].unwrapped.save_design_plot(str(design_path))
+            else:
+                # SubprocVecEnv - call via env_method
+                env.env_method('save_design_plot', str(design_path), indices=[0])
+        except Exception as e:
+            print(f"Warning: Could not save design plot: {e}")
         
         # Plot and save distribution
         if efield_state is not None:
             distribution_path = self.distribution_dir / f"distribution_rollout_{self.rollout_count:04d}.png"
             self.distribution_image_paths.append(str(distribution_path))
-            simulation.plot_distribution(
-                efield_state=efield_state,
-                save_path=str(distribution_path),
-                show_plot=False
-            )
+            try:
+                if hasattr(env, 'envs'):
+                    # DummyVecEnv - direct call
+                    env.envs[0].unwrapped.save_distribution_plot(str(distribution_path))
+                else:
+                    # SubprocVecEnv - call via env_method
+                    env.env_method('save_distribution_plot', str(distribution_path), indices=[0])
+            except Exception as e:
+                print(f"Warning: Could not save distribution plot: {e}")
         
-        # Print rollout count and metrics
-        print(f"Rollout {self.rollout_count}: Transmission={total_transmission:.4f}, "
-              f"Balance={balance_score:.4f}, Score={current_score:.4f}, Reward={reward:.4f}")
+        # Print AVERAGE metrics across all environments
+        print(f"Rollout {self.rollout_count} (avg of {n_envs} envs): "
+              f"Transmission={avg_transmission:.4f}, Balance={avg_balance:.4f}, "
+              f"Score={avg_score:.4f}, Reward={reward:.4f}")
     
     def _on_training_end(self) -> None:
         """Called when training ends."""
@@ -309,7 +298,7 @@ def train_ppo(
     print("Creating environment...")
     env = make_vec_env(MinimalEnv, n_envs=n_envs,
                        env_kwargs={"render_mode": None},
-                       vec_env_cls=DummyVecEnv)
+                       vec_env_cls=SubprocVecEnv)
 
     # Create evaluation environment
     eval_env = MinimalEnv(render_mode=None)
