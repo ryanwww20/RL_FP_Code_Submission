@@ -129,13 +129,13 @@ class MinimalEnv(gym.Env):
         Uses get_output_transmission() method directly.
         """
         # Get transmission using the method from meep_simulation
-        transmission_1, transmission_2, total_transmission = self.simulation.get_output_transmission(band_num=1)
+        transmission_1, transmission_2, total_transmission, diff_transmission = self.simulation.get_output_transmission(band_num=1)
         
         transmission_score = min(max(total_transmission, 0), 1)
         
         # Calculate balance score (how evenly distributed between outputs)
         if total_transmission > 0:
-            diff_ratio = abs(transmission_1 - transmission_2) / total_transmission
+            diff_ratio = diff_transmission / total_transmission
         else:
             diff_ratio = 1.0  # If no transmission, balance is worst
         balance_score = max(1 - diff_ratio, 0)
@@ -147,6 +147,7 @@ class MinimalEnv(gym.Env):
         # Store metrics for info dict
         self._step_metrics = {
             "total_transmission": total_transmission,
+            "diff_transmission": diff_transmission,
             "transmission_1": transmission_1,
             "transmission_2": transmission_2,
             "transmission_score": transmission_score,

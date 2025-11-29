@@ -659,8 +659,8 @@ class WaveguideSimulation:
         mode_transmission_1 = np.abs(alpha_forward_1) ** 2
         alpha_forward_2 = res2.alpha[0, 0, 0]
         mode_transmission_2 = np.abs(alpha_forward_2) ** 2
-        
-        return raw_flux_1, raw_flux_2, mode_transmission_1, mode_transmission_2
+        diff_transmission = abs(mode_transmission_1 - mode_transmission_2)
+        return raw_flux_1, raw_flux_2, mode_transmission_1, mode_transmission_2, diff_transmission
 
     def get_flux_rectangle(self):
         """
@@ -720,13 +720,13 @@ class WaveguideSimulation:
             Transmission ratios relative to input mode
         """
         _, input_mode = self.get_flux_input_mode(band_num)
-        _, _, output_mode_1, output_mode_2 = self.get_flux_output_mode(band_num)
+        _, _, output_mode_1, output_mode_2, diff_transmission = self.get_flux_output_mode(band_num)
         
         transmission_1 = output_mode_1 / input_mode if input_mode > 0 else 0.0
         transmission_2 = output_mode_2 / input_mode if input_mode > 0 else 0.0
         total_transmission = transmission_1 + transmission_2
         
-        return transmission_1, transmission_2, total_transmission
+        return transmission_1, transmission_2, total_transmission, diff_transmission
 
     def plot_design(self, matrix=None, save_path=None, show_plot=True):
         """
@@ -997,8 +997,8 @@ if __name__ == "__main__":
     input_mode_flux, output_mode_flux_1, output_mode_flux_2, efield_state, hz_data, input_mode, output_mode_1, output_mode_2 = results
     
     # 4. Display results
-    trans_1, trans_2, total_trans = sim.get_output_transmission(band_num=1)
-    print(f"Transmission: Output1={trans_1*100:.1f}%, Output2={trans_2*100:.1f}%, Total={total_trans*100:.1f}%")
+    trans_1, trans_2, total_trans, diff_trans = sim.get_output_transmission(band_num=1)
+    print(f"Transmission: Output1={trans_1*100:.1f}%, Output2={trans_2*100:.1f}%, Total={total_trans*100:.1f}%, Diff={diff_trans:.6f}")
     
     # Optional: Plot results
     sim.plot_design(matrix=matrix, show_plot=False, 
