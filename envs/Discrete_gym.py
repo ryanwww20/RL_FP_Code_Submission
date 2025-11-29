@@ -112,8 +112,8 @@ class MinimalEnv(gym.Env):
         output_plane_x = -1 + (self.material_matrix_idx+0.1) * \
             config.simulation.pixel_size
 
-        input_flux, output_flux_1, output_flux_2, output_all_flux, ez_data, input_mode, output_mode_1, output_mode_2 = self.simulation.calculate_flux(
-            self.material_matrix)
+        input_flux, output_flux_1, output_flux_2, output_all_flux, ez_data = self.simulation.calculate_flux(
+            self.material_matrix, output_plane_x=output_plane_x)
         print('=============== Flux Results ===============')
         print(f'Input Flux: {input_flux:.4f}')
         print(f'Output Flux 1: {output_flux_1:.4f}')
