@@ -104,16 +104,23 @@ class TrainingCallback(BaseCallback):
             print(f"Warning: Could not access environment attributes: {e}")
             return
         
-        # Get reward from rollout statistics if available
-        reward = 0.0
-        if hasattr(self, 'logger') and self.logger.name_to_value:
-            if 'rollout/ep_rew_mean' in self.logger.name_to_value:
-                reward = self.logger.name_to_value['rollout/ep_rew_mean']
+        # Get episode reward from rollout buffer
+        # Since n_steps = episode_length, we can sum rewards per environment
+        avg_episode_reward = 0.0
+        try:
+            if hasattr(self.model, 'rollout_buffer') and self.model.rollout_buffer is not None:
+                # rewards shape: (n_steps, n_envs)
+                rewards = self.model.rollout_buffer.rewards
+                # Sum rewards across steps for each env, then average across envs
+                episode_rewards = np.sum(rewards, axis=0)  # shape: (n_envs,)
+                avg_episode_reward = float(np.mean(episode_rewards))
+        except Exception as e:
+            print(f"Warning: Could not get reward from rollout buffer: {e}")
         
         # Record AVERAGE metrics to CSV
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         with open(self.csv_path, 'a') as f:
-            f.write(f'{timestamp},{self.rollout_count},{avg_transmission},{avg_balance},{avg_score},{reward}\n')
+            f.write(f'{timestamp},{self.rollout_count},{avg_transmission},{avg_balance},{avg_score},{avg_episode_reward}\n')
         
         # Plot and save design (use first environment as representative)
         design_path = self.design_dir / f"design_rollout_{self.rollout_count:04d}.png"
@@ -145,7 +152,7 @@ class TrainingCallback(BaseCallback):
         # Print AVERAGE metrics across all environments
         print(f"Rollout {self.rollout_count} (avg of {n_envs} envs): "
               f"Transmission={avg_transmission:.4f}, Balance={avg_balance:.4f}, "
-              f"Score={avg_score:.4f}, Reward={reward:.4f}")
+              f"Score={avg_score:.4f}, EpReward={avg_episode_reward:.4f}")
     
     def _on_training_end(self) -> None:
         """Called when training ends."""
