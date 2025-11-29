@@ -65,9 +65,9 @@ class WaveguideSimulation:
         self.sim = None
         self.hz_data = None
         
-        # Flux monitor regions
-        self.flux_regions = []  # State flux monitors (along y-axis)
-        self.flux_region_y_positions = []  # Y-coordinates of state flux monitors
+        # Electric field monitor for state
+        self.efield_monitor = None  # Electric field monitor for state (along y-axis)
+        self.efield_region_y_positions = []  # Y-coordinates of state efield monitor
         self.input_flux_region = None  # Input mode flux monitor
         self.output_flux_region_1 = None  # Output mode flux monitor 1
         self.output_flux_region_2 = None  # Output mode flux monitor 2
@@ -77,7 +77,7 @@ class WaveguideSimulation:
         self.design_region_flux_region_right = None
         self.num_flux_regions = config.simulation.num_flux_regions
         self.simulation_time = config.simulation.simulation_time
-        self.output_x = config.simulation.output_x
+        self.state_output_x = config.simulation.state_output_x
         self.design_region_x = config.simulation.design_region_x
         self.design_region_y = config.simulation.design_region_y
         self.pixel_size = config.simulation.pixel_size
@@ -385,17 +385,13 @@ class WaveguideSimulation:
 
         return self.sim
 
-    def add_flux_monitor_state(self, region_height=None):
+    def add_efield_monitor_state(self):
         """
-        Add multiple flux monitors along y-axis at a specific x position
-
-        Args:
-            x_position: x coordinate in microns where to measure flux
-            num_regions: number of flux regions along y-axis
-            region_height: height of each flux region (default: cell_height / num_regions)
+        Add electric field monitor along y-axis at a specific x position for state observation.
+        Uses DFT (Discrete Fourier Transform) to monitor the electric field.
 
         Returns:
-            list of flux monitor objects
+            DFT field monitor object
         """
         if self.sim is None:
             raise ValueError(
@@ -404,32 +400,36 @@ class WaveguideSimulation:
         # Calculate frequency from wavelength
         frequency = 1.0 / self.wavelength
 
-        # Determine region height
-        if region_height is None:
-            region_height = self.cell_size.y / self.num_flux_regions
-
-        # Calculate y positions for each region
+        # Calculate y positions for sampling
         # y spans from -cell_size.y/2 to +cell_size.y/2
         y_min = -self.cell_size.y / 2
         y_max = self.cell_size.y / 2
-        y_positions = np.linspace(
-            y_min + region_height/2, y_max - region_height/2, self.num_flux_regions)
-
+        
+        # Create a vertical line at state_output_x spanning the full y range
+        # We'll sample at num_flux_regions points along y
+        y_positions = np.linspace(y_min, y_max, self.num_flux_regions)
+        
         # Store y positions for plotting
-        self.flux_region_y_positions = y_positions.copy()
+        self.efield_region_y_positions = y_positions.copy()
 
-        # Create flux monitors for each y position
-        flux_monitors = []
-        for y_pos in y_positions:
-            flux_region = mp.FluxRegion(
-                center=mp.Vector3(self.output_x, y_pos, 0),
-                size=mp.Vector3(0, region_height, 0)  # Small vertical segment
-            )
-            flux_monitor = self.sim.add_flux(frequency, 0, 1, flux_region)
-            flux_monitors.append(flux_monitor)
-
-        self.flux_regions = flux_monitors
-        return flux_monitors
+        # Create DFT field monitor for electric field (Ez component for 2D TM mode)
+        # The monitor is a vertical line at x = state_output_x
+        efield_region = mp.Volume(
+            center=mp.Vector3(self.state_output_x, 0, 0),
+            size=mp.Vector3(0, self.cell_size.y, 0)  # Vertical line spanning full height
+        )
+        
+        # Add DFT fields monitor for Ez component
+        # For single frequency, use fcen, df, nfreq format (3 numbers)
+        # fcen = center frequency, df = frequency width, nfreq = number of frequencies
+        self.efield_monitor = self.sim.add_dft_fields(
+            [mp.Ez],  # Monitor Ez component (for 2D TM mode)
+            frequency, 0.0, 1,  # fcen, df, nfreq (single frequency: center freq, zero width, 1 frequency)
+            center=efield_region.center,
+            size=efield_region.size
+        )
+        
+        return self.efield_monitor
 
     def add_flux_monitor_input_mode(self):
         """
@@ -511,39 +511,65 @@ class WaveguideSimulation:
             frequency, 0, 1, self.design_region_flux_region_right)
         return self.design_region_flux_region_up, self.design_region_flux_region_down, self.design_region_flux_region_left, self.design_region_flux_region_right
 
-    def get_flux_state(self):
+    def get_efield_state(self):
         """
-        Get flux values for all state flux monitors (along y-axis)
+        Get electric field values for state monitor (along y-axis).
+        Returns the magnitude squared of the electric field (|Ez|^2).
 
         Returns:
-            flux_values: array of flux values at each y position
+            efield_state: array of |Ez|^2 values at each y position
         """
-        if not self.flux_regions:
+        if self.efield_monitor is None:
             raise ValueError(
-                "No flux regions. Call add_flux_monitor_state() first.")
+                "No electric field monitor. Call add_efield_monitor_state() first.")
 
-        # Get flux values for all monitors
-        flux_values = []
-        for flux_monitor in self.flux_regions:
-            fluxes = mp.get_fluxes(flux_monitor)
-            # Extract the flux value (first element if it's a list/array)
-            if isinstance(fluxes, (list, np.ndarray)):
-                flux_value = fluxes[0] if len(fluxes) > 0 else 0.0
+        # Get electric field data from DFT monitor
+        # get_dft_array returns the field data as a numpy array
+        # For a vertical line monitor, this should be a 1D array along y
+        efield_data = self.sim.get_dft_array(self.efield_monitor, mp.Ez, 0)
+        
+        # Extract values along the y-axis
+        # For a vertical line monitor, Meep typically returns a 1D array
+        if efield_data.ndim == 1:
+            # Direct 1D array along y-axis
+            efield_values = np.abs(efield_data) ** 2
+        elif efield_data.ndim == 2:
+            # If 2D, extract the column (for vertical line, should be single column)
+            # Take the middle column or first column depending on shape
+            if efield_data.shape[1] == 1:
+                efield_values = np.abs(efield_data[:, 0]) ** 2
             else:
-                flux_value = fluxes
-            flux_values.append(flux_value)
+                # Multiple columns - take middle column
+                mid_x = efield_data.shape[1] // 2
+                efield_values = np.abs(efield_data[:, mid_x]) ** 2
+        else:
+            # Fallback: flatten and take first num_flux_regions elements
+            efield_values = np.abs(efield_data.flatten()[:self.num_flux_regions]) ** 2
+        
+        # Ensure we have the right number of values
+        if len(efield_values) != self.num_flux_regions:
+            # Resample to match num_flux_regions
+            if len(efield_values) > self.num_flux_regions:
+                # Downsample by taking evenly spaced indices
+                indices = np.linspace(0, len(efield_values) - 1, self.num_flux_regions, dtype=int)
+                efield_values = efield_values[indices]
+            else:
+                # Upsample by linear interpolation using numpy
+                old_indices = np.linspace(0, 1, len(efield_values))
+                new_indices = np.linspace(0, 1, self.num_flux_regions)
+                efield_values = np.interp(new_indices, old_indices, efield_values)
 
-        return np.array(flux_values)
+        return np.array(efield_values)
 
     def get_flux_input_mode(self, band_num=1):
         """
-        Get input mode coefficient (power) using eigenmode expansion.
+        Get input mode coefficient (power) using eigenmode expansion and raw flux value.
         
         Args:
             band_num: The mode band number (1 = fundamental mode TE0)
             
         Returns:
-            Mode power (|alpha|^2) for the specified mode at input
+            (raw_flux, mode_power): Tuple of raw flux value and mode power (|alpha|^2) for the specified mode at input
         """
         if self.sim is None:
             raise ValueError(
@@ -551,6 +577,9 @@ class WaveguideSimulation:
         if self.input_flux_region is None:
             raise ValueError(
                 "No input flux monitor added. Call add_flux_monitor_input_mode() first.")
+        
+        # Get raw flux value
+        raw_flux = mp.get_fluxes(self.input_flux_region)[0]
         
         # Get eigenmode coefficients at input (suppress MPB output)
         old_stdout_fd = os.dup(1)
@@ -578,17 +607,17 @@ class WaveguideSimulation:
         # Mode power = |alpha|^2
         mode_power = np.abs(alpha_forward) ** 2
         
-        return mode_power
+        return raw_flux, mode_power
 
     def get_flux_output_mode(self, band_num=1):
         """
-        Get output mode coefficients (transmission) for both output waveguides.
+        Get output mode coefficients (transmission) and raw flux values for both output waveguides.
         
         Args:
             band_num: The mode band number (1 = fundamental mode TE0)
             
         Returns:
-            (mode_1, mode_2): Tuple of mode transmission powers (|alpha|^2) for output 1 and 2
+            (raw_flux_1, raw_flux_2, mode_1, mode_2): Tuple of raw flux values and mode transmission powers (|alpha|^2) for output 1 and 2
         """
         if self.sim is None:
             raise ValueError(
@@ -596,6 +625,10 @@ class WaveguideSimulation:
         if self.output_flux_region_1 is None or self.output_flux_region_2 is None:
             raise ValueError(
                 "No output flux monitors added. Call add_flux_monitor_output_mode() first.")
+        
+        # Get raw flux values
+        raw_flux_1 = mp.get_fluxes(self.output_flux_region_1)[0]
+        raw_flux_2 = mp.get_fluxes(self.output_flux_region_2)[0]
         
         # Get eigenmode coefficients for output 1 and 2 (suppress MPB output)
         old_stdout_fd = os.dup(1)
@@ -627,7 +660,7 @@ class WaveguideSimulation:
         alpha_forward_2 = res2.alpha[0, 0, 0]
         mode_transmission_2 = np.abs(alpha_forward_2) ** 2
         
-        return mode_transmission_1, mode_transmission_2
+        return raw_flux_1, raw_flux_2, mode_transmission_1, mode_transmission_2
 
     def get_flux_rectangle(self):
         """
@@ -686,8 +719,8 @@ class WaveguideSimulation:
             (transmission_1, transmission_2, total_transmission): 
             Transmission ratios relative to input mode
         """
-        input_mode = self.get_flux_input_mode(band_num)
-        output_mode_1, output_mode_2 = self.get_flux_output_mode(band_num)
+        _, input_mode = self.get_flux_input_mode(band_num)
+        _, _, output_mode_1, output_mode_2 = self.get_flux_output_mode(band_num)
         
         transmission_1 = output_mode_1 / input_mode if input_mode > 0 else 0.0
         transmission_2 = output_mode_2 / input_mode if input_mode > 0 else 0.0
@@ -812,9 +845,9 @@ class WaveguideSimulation:
         )
 
         # --- 4. Overlays: Output Measurement Plane ---
-        # Draw a vertical dashed line at self.output_x
-        plt.axvline(x=self.output_x, color='red', linestyle=':', linewidth=2,
-                    label=f'Output Flux Plane (x={self.output_x}µm)')
+        # Draw a vertical dashed line at self.state_output_x
+        plt.axvline(x=self.state_output_x, color='red', linestyle=':', linewidth=2,
+                    label=f'Output Flux Plane (x={self.state_output_x}µm)')
 
         # --- 5. Legend and Final Setup ---
         # Use ax.legend() to collect labels from patches
@@ -861,30 +894,30 @@ class WaveguideSimulation:
         else:
             plt.close()
 
-    def plot_distribution(self, state_flux, save_path=None, show_plot=True):
+    def plot_distribution(self, efield_state, save_path=None, show_plot=True):
         """
-        Plot the flux distribution along the output plane.
+        Plot the electric field distribution along the output plane.
 
         Args:
-            state_flux: 1D array of flux values at each detector position
+            efield_state: 1D array of |Ez|^2 values at each detector position
             save_path: Optional path to save the plot
             show_plot: Whether to display the plot
         """
         # Use y-coordinates as x-axis if available
-        if len(self.flux_region_y_positions) == len(state_flux):
-            x_data = self.flux_region_y_positions
+        if len(self.efield_region_y_positions) == len(efield_state):
+            x_data = self.efield_region_y_positions
             x_label = 'Y Position (μm)'
         else:
             # Fallback to index if y positions not available
-            x_data = np.arange(len(state_flux))
+            x_data = np.arange(len(efield_state))
             x_label = 'Detector Index'
         
         plt.figure(figsize=(10, 6))
-        plt.plot(x_data, state_flux, 'b-',
-                 linewidth=2, label='Flux Distribution')
+        plt.plot(x_data, efield_state, 'b-',
+                 linewidth=2, label='Electric Field |Ez|²')
         plt.xlabel(x_label)
-        plt.ylabel('Flux')
-        plt.title('Flux Distribution at Output Plane')
+        plt.ylabel('|Ez|²')
+        plt.title('Electric Field Distribution at Output Plane')
         plt.legend()
         plt.grid(True, alpha=0.3)
 
@@ -895,7 +928,7 @@ class WaveguideSimulation:
                 if save_dir and not os.path.exists(save_dir):
                     os.makedirs(save_dir, exist_ok=True)
                 plt.savefig(save_path, dpi=150, bbox_inches='tight')
-                print(f"Flux distribution plot saved to '{save_path}'")
+                print(f"Electric field distribution plot saved to '{save_path}'")
             except (FileNotFoundError, OSError) as e:
                 print(f"Warning: Could not save plot to '{save_path}': {e}")
             except Exception as e:
@@ -914,37 +947,32 @@ class WaveguideSimulation:
             matrix: Material matrix (pixel_num_x x pixel_num_y), 1=silicon, 0=silica
             
         Returns:
-            (input_flux, output_flux_1, output_flux_2, state_flux, hz_data, 
+            (input_mode_flux, output_mode_flux_1, output_mode_flux_2, efield_state, hz_data, 
              input_mode, output_mode_1, output_mode_2)
         """
         # Create geometry with material matrix
         self.create_geometry(matrix=matrix)
 
-        # Create simulation and add flux monitors
+        # Create simulation and add monitors
         self.create_simulation()
-        self.add_flux_monitor_state()
+        self.add_efield_monitor_state()
         self.add_flux_monitor_input_mode()
         self.add_flux_monitor_output_mode()
 
         # Run simulation
         self.run()
 
-        # Get flux state (distribution along y-axis)
-        state_flux = self.get_flux_state()
+        # Get electric field state (distribution along y-axis)
+        efield_state = self.get_efield_state()  # Returns |Ez|^2 values
         
-        # Get input and output flux values (raw flux, not mode coefficients)
-        input_flux_value = mp.get_fluxes(self.input_flux_region)[0]
-        output_flux_value_1 = mp.get_fluxes(self.output_flux_region_1)[0]
-        output_flux_value_2 = mp.get_fluxes(self.output_flux_region_2)[0]
-        
-        # Get mode coefficients (fundamental mode transmission)
-        input_mode = self.get_flux_input_mode(band_num=1)
-        output_mode_1, output_mode_2 = self.get_flux_output_mode(band_num=1)
+        # Get input and output flux values and mode coefficients (using existing functions)
+        input_mode_flux, input_mode = self.get_flux_input_mode(band_num=1)
+        output_mode_flux_1, output_mode_flux_2, output_mode_1, output_mode_2 = self.get_flux_output_mode(band_num=1)
 
         # Get field data
         hz_data = self.get_hzfield_data()
 
-        return input_flux_value, output_flux_value_1, output_flux_value_2, state_flux, hz_data, input_mode, output_mode_1, output_mode_2
+        return input_mode_flux, output_mode_flux_1, output_mode_flux_2, efield_state, hz_data, input_mode, output_mode_1, output_mode_2
 
 
 if __name__ == "__main__":
@@ -957,7 +985,7 @@ if __name__ == "__main__":
     # 1. Create simulation instance
     sim = WaveguideSimulation()
     
-    # 2. Define material matrix (50x50 pixels, all silicon for this example)
+    # 2. Define material matrix (pixel_num_x x pixel_num_y pixels)
     # 1 = silicon, 0 = silica
     matrix = np.ones((sim.pixel_num_x, sim.pixel_num_y))
     
@@ -966,7 +994,7 @@ if __name__ == "__main__":
     
     # 3. Run simulation and get results
     results = sim.calculate_flux(matrix)
-    input_flux, output_flux_1, output_flux_2, state_flux, hz_data, input_mode, output_mode_1, output_mode_2 = results
+    input_mode_flux, output_mode_flux_1, output_mode_flux_2, efield_state, hz_data, input_mode, output_mode_1, output_mode_2 = results
     
     # 4. Display results
     trans_1, trans_2, total_trans = sim.get_output_transmission(band_num=1)
@@ -975,5 +1003,5 @@ if __name__ == "__main__":
     # Optional: Plot results
     sim.plot_design(matrix=matrix, show_plot=False, 
                    save_path='sample_img/field_result.png')
-    sim.plot_distribution(state_flux=state_flux,
-                         save_path='sample_img/flux_distribution.png', show_plot=False)
+    sim.plot_distribution(efield_state=efield_state,
+                         save_path='sample_img/efield_distribution.png', show_plot=False)

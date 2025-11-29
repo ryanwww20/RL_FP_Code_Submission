@@ -16,7 +16,7 @@ class SimulationConfig:
     output_y_separation: float
     simulation_time: float
     num_flux_regions: int
-    output_x: float
+    state_output_x: float
     design_region_x: float
     design_region_y: float
     pixel_size: float
