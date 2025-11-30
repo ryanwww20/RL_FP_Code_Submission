@@ -402,44 +402,72 @@ def train_ppo(
     model.save(save_path_with_timestamp)
     print(f"Model saved to {save_path_with_timestamp}")
 
-    # Test the trained model
-    print("\nTesting trained model...")
-    test_model(model, eval_env, n_episodes=1)
+    # Final evaluation using ModelEvaluator (same as rollout end)
+    print("\nRunning final evaluation...")
+    final_eval(model, eval_env, save_dir=callback_dir)
 
     return model
 
 
-def test_model(model, env, n_episodes=1):
+def final_eval(model, env, save_dir=None):
     """
-    Test a trained model on the environment.
-
+    Run final evaluation using ModelEvaluator (same logic as rollout end).
+    
     Args:
-        model: Trained PPO model
-        env: Environment to test on
-        n_episodes: Number of episodes to test
+        model: Trained model
+        env: Evaluation environment
+        save_dir: Directory to save final results (optional)
     """
-    total_rewards = []
-
-    for episode in range(n_episodes):
-        obs, info = env.reset()
-        episode_reward = 0
-        done = False
-        step_count = 0
-
-        while not done and step_count < 1000:
-            action, _ = model.predict(obs, deterministic=True)
-            obs, reward, terminated, truncated, info = env.step(action)
-            done = terminated or truncated
-            episode_reward += reward
-            step_count += 1
-
-        total_rewards.append(episode_reward)
-        print(
-            f"Episode {episode + 1}: Reward = {episode_reward:.2f}, Steps = {step_count}")
-
-    print(
-        f"\nAverage reward over {n_episodes} episodes: {np.mean(total_rewards):.2f}")
-    print(f"Std deviation: {np.std(total_rewards):.2f}")
+    evaluator = ModelEvaluator(model, env)
+    results_df = evaluator.evaluate(n_episodes=1, deterministic=True)
+    
+    if len(results_df) > 0:
+        metrics = results_df.iloc[0]
+        
+        # Extract metrics with fallbacks
+        transmission = metrics.get('total_mode_transmission', metrics.get('total_transmission', 0.0))
+        balance = metrics.get('balance_score', 0.0)
+        score = metrics.get('current_score', 0.0)
+        total_reward = metrics.get('total_reward', 0.0)
+        
+        print(f"\n{'='*50}")
+        print("Final Evaluation Results:")
+        print(f"{'='*50}")
+        print(f"  Transmission: {transmission:.4f}")
+        print(f"  Balance Score: {balance:.4f}")
+        print(f"  Score: {score:.4f}")
+        print(f"  Total Reward: {total_reward:.4f}")
+        print(f"{'='*50}")
+        
+        # Save final design and distribution plots if save_dir provided
+        if save_dir:
+            save_path = Path(save_dir)
+            img_dir = save_path / "img"
+            img_dir.mkdir(exist_ok=True)
+            
+            # Save final design
+            final_design_path = img_dir / "final_design.png"
+            try:
+                if hasattr(env, 'unwrapped'):
+                    env.unwrapped.save_design_plot(str(final_design_path), title_suffix="Final Evaluation")
+                else:
+                    env.save_design_plot(str(final_design_path), title_suffix="Final Evaluation")
+                print(f"Final design saved to: {final_design_path}")
+            except Exception as e:
+                print(f"Warning: Could not save final design plot: {e}")
+            
+            # Save final distribution
+            final_distribution_path = img_dir / "final_distribution.png"
+            try:
+                if hasattr(env, 'unwrapped'):
+                    env.unwrapped.save_distribution_plot(str(final_distribution_path), title_suffix="Final Evaluation")
+                else:
+                    env.save_distribution_plot(str(final_distribution_path), title_suffix="Final Evaluation")
+                print(f"Final distribution saved to: {final_distribution_path}")
+            except Exception as e:
+                print(f"Warning: Could not save final distribution plot: {e}")
+    else:
+        print("Warning: Evaluation returned no results.")
 
 
 def load_training_config(config_path=None):
