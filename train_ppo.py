@@ -43,12 +43,17 @@ class TrainingCallback(BaseCallback):
     Callback to record metrics, plot designs, save to CSV, and create GIFs.
     Follows README structure: ppo_model_log_<start_time>/ with img/, plot/, result.csv
     """
-    def __init__(self, save_dir, verbose=1, eval_env=None):
+    def __init__(self, save_dir, verbose=1, eval_env=None, model_save_path=None):
         super(TrainingCallback, self).__init__(verbose)
         self.save_dir = Path(save_dir)
         self.save_dir.mkdir(parents=True, exist_ok=True)
         self.rollout_count = 0
         self.eval_env = eval_env
+        self.model_save_path = model_save_path  # Path to save best model
+        
+        # Best model tracking
+        self.best_score = -float('inf')
+        self.best_rollout = 0
         
         # Create directory structure according to README
         self.img_dir = self.save_dir / "img"
@@ -172,6 +177,33 @@ class TrainingCallback(BaseCallback):
         print(f"Rollout {self.rollout_count} (Eval Result): "
               f"Transmission={avg_transmission:.4f}, Balance={avg_balance:.4f}, "
               f"Score={avg_score:.4f}, EpReward={avg_episode_reward:.4f}")
+        
+        # Check if this is the best score and save model if so
+        if avg_score > self.best_score:
+            self.best_score = avg_score
+            self.best_rollout = self.rollout_count
+            print(f"  ★ New best score! Saving best model...")
+            
+            if self.model_save_path:
+                best_model_path = self.model_save_path.replace('.zip', '_best.zip')
+                self.model.save(best_model_path)
+                print(f"  ★ Best model saved to: {best_model_path}")
+                
+                # Also save best design and distribution
+                best_design_path = self.img_dir / "best_design.png"
+                best_distribution_path = self.img_dir / "best_distribution.png"
+                try:
+                    if self.eval_env is not None:
+                        if hasattr(self.eval_env, 'unwrapped'):
+                            self.eval_env.unwrapped.save_design_plot(str(best_design_path), title_suffix=f"Best (Rollout {self.rollout_count}, Score={avg_score:.4f})")
+                            self.eval_env.unwrapped.save_distribution_plot(str(best_distribution_path), title_suffix=f"Best (Rollout {self.rollout_count}, Score={avg_score:.4f})")
+                        else:
+                            self.eval_env.save_design_plot(str(best_design_path), title_suffix=f"Best (Rollout {self.rollout_count}, Score={avg_score:.4f})")
+                            self.eval_env.save_distribution_plot(str(best_distribution_path), title_suffix=f"Best (Rollout {self.rollout_count}, Score={avg_score:.4f})")
+                except Exception as e:
+                    print(f"  Warning: Could not save best design/distribution plots: {e}")
+        else:
+            print(f"  (Best score: {self.best_score:.4f} at rollout {self.best_rollout})")
         
         # Update GIFs and plots after each rollout
         self._update_gifs_and_plots()
@@ -354,6 +386,11 @@ def train_ppo(
 
     # Create evaluation environment
     eval_env = MinimalEnv(render_mode=None)
+    
+    # Define model save path
+    save_path_with_timestamp = f"models/ppo_model_{start_timestamp}.zip"
+    # Create models directory if it doesn't exist
+    os.makedirs("models", exist_ok=True)
 
     # Create PPO model
     print("Creating PPO model...")
@@ -374,8 +411,13 @@ def train_ppo(
         verbose=1
     )
 
-    # Create callback
-    callback = TrainingCallback(save_dir=callback_dir, verbose=1, eval_env=eval_env)
+    # Create callback with model save path for best model tracking
+    callback = TrainingCallback(
+        save_dir=callback_dir, 
+        verbose=1, 
+        eval_env=eval_env,
+        model_save_path=save_path_with_timestamp
+    )
 
     # Train the model
     print(f"Training PPO agent for {total_timesteps} timesteps...")
@@ -393,14 +435,12 @@ def train_ppo(
         print(f"Error during training: {e}")
 
     # Save the final model (even if interrupted)
-    # Use starting timestamp for consistent naming
-    save_path_with_timestamp = f"models/ppo_model_{start_timestamp}.zip"
-
-    # Create models directory if it doesn't exist
-    os.makedirs("models", exist_ok=True)
-
     model.save(save_path_with_timestamp)
     print(f"Model saved to {save_path_with_timestamp}")
+    
+    # Print best model info
+    print(f"\nBest model was at rollout {callback.best_rollout} with score {callback.best_score:.4f}")
+    print(f"Best model saved to: {save_path_with_timestamp.replace('.zip', '_best.zip')}")
 
     # Final evaluation using ModelEvaluator (same as rollout end)
     print("\nRunning final evaluation...")
