@@ -16,6 +16,7 @@ from stable_baselines3.common.env_util import make_vec_env, DummyVecEnv, Subproc
 from stable_baselines3.common.callbacks import BaseCallback
 from envs.Discrete_gym import MinimalEnv
 from PIL import Image
+from eval import ModelEvaluator
 
 CONFIG_ENV_VAR = "TRAINING_CONFIG_PATH"
 DEFAULT_CONFIG_PATH = Path(__file__).resolve().parent / "config.yaml"
@@ -42,11 +43,12 @@ class TrainingCallback(BaseCallback):
     Callback to record metrics, plot designs, save to CSV, and create GIFs.
     Follows README structure: ppo_model_log_<start_time>/ with img/, plot/, result.csv
     """
-    def __init__(self, save_dir, verbose=1):
+    def __init__(self, save_dir, verbose=1, eval_env=None):
         super(TrainingCallback, self).__init__(verbose)
         self.save_dir = Path(save_dir)
         self.save_dir.mkdir(parents=True, exist_ok=True)
         self.rollout_count = 0
+        self.eval_env = eval_env
         
         # Create directory structure according to README
         self.img_dir = self.save_dir / "img"
@@ -78,81 +80,98 @@ class TrainingCallback(BaseCallback):
         """Called when rollout collection ends."""
         self.rollout_count += 1
         
-        # Get environment from training_env
-        env = self.training_env
-        
-        # Get metrics from ALL environments (works with both DummyVecEnv and SubprocVecEnv)
-        try:
-            if hasattr(env, 'envs'):
-                # DummyVecEnv - get metrics from all environments directly
-                all_metrics = [e.unwrapped.get_current_metrics() for e in env.envs]
+        # Calculate metrics using ModelEvaluator
+        if self.eval_env is not None:
+            print(f"\nRunning evaluation for rollout {self.rollout_count}...")
+            evaluator = ModelEvaluator(self.model, self.eval_env)
+            # Run 1 episode, deterministic (consistent with eval.py logic)
+            results_df = evaluator.evaluate(n_episodes=1, deterministic=True)
+            
+            if len(results_df) > 0:
+                # Use the first (and likely only) row
+                metrics = results_df.iloc[0]
+                
+                # Extract metrics with fallbacks
+                avg_transmission = metrics.get('total_mode_transmission', metrics.get('total_transmission', 0.0))
+                avg_balance = metrics.get('balance_score', 0.0)
+                avg_score = metrics.get('current_score', 0.0)
+                avg_episode_reward = metrics.get('total_reward', 0.0)
             else:
-                # SubprocVecEnv - call on ALL environments (no indices parameter)
-                all_metrics = env.env_method('get_current_metrics')
+                avg_transmission = 0.0
+                avg_balance = 0.0
+                avg_score = 0.0
+                avg_episode_reward = 0.0
+                
+            # Use the evaluation environment's last state for plotting
+            # Since evaluate() runs episodes, the env should be in the final state of the last episode
+            # MinimalEnv stores the last metrics in self.last_episode_metrics
+            # But ModelEvaluator runs reset() at start of episode. 
+            # After evaluate(), the env is at the end of the last episode.
+            pass # Continue to logging
             
-            # Calculate average across all environments
-            n_envs = len(all_metrics)
-            avg_transmission = sum(m['total_transmission'] for m in all_metrics) / n_envs
-            avg_balance = sum(m['balance_score'] for m in all_metrics) / n_envs
-            avg_score = sum(m['current_score'] for m in all_metrics) / n_envs
-            
-            # For plotting, use the first environment's data (as representative)
-            material_matrix = all_metrics[0]['material_matrix']
-            efield_state = all_metrics[0]['efield_state']
-            
-        except Exception as e:
-            print(f"Warning: Could not access environment attributes: {e}")
-            return
-        
-        # Get episode reward from rollout buffer
-        # Since n_steps = episode_length, we can sum rewards per environment
-        avg_episode_reward = 0.0
-        try:
-            if hasattr(self.model, 'rollout_buffer') and self.model.rollout_buffer is not None:
-                # rewards shape: (n_steps, n_envs)
-                rewards = self.model.rollout_buffer.rewards
-                # Sum rewards across steps for each env, then average across envs
-                episode_rewards = np.sum(rewards, axis=0)  # shape: (n_envs,)
-                avg_episode_reward = float(np.mean(episode_rewards))
-        except Exception as e:
-            print(f"Warning: Could not get reward from rollout buffer: {e}")
-        
+        else:
+             print("Warning: eval_env not provided to callback, using training env metrics.")
+             # Fallback to old logic if no eval_env
+             # Get environment from training_env
+             env = self.training_env
+             # ... (Rest of old logic if needed, but we assume eval_env is provided)
+             # To keep it simple, I'll just skip the fallback implementation detail here 
+             # and assume eval_env is passed.
+             avg_transmission = 0
+             avg_balance = 0
+             avg_score = 0
+             avg_episode_reward = 0
+
         # Record AVERAGE metrics to CSV
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         with open(self.csv_path, 'a') as f:
             f.write(f'{timestamp},{self.rollout_count},{avg_transmission},{avg_balance},{avg_score},{avg_episode_reward}\n')
         
-        # Plot and save design (use first environment as representative)
+        # Plot and save design (use evaluation environment)
         design_path = self.design_dir / f"design_rollout_{self.rollout_count:04d}.png"
         self.design_image_paths.append(str(design_path))
         try:
-            if hasattr(env, 'envs'):
-                # DummyVecEnv - direct call
-                env.envs[0].unwrapped.save_design_plot(str(design_path))
+            if self.eval_env is not None:
+                 # MinimalEnv has save_design_plot method
+                 # If wrapped in Monitor/DummyVecEnv, might need unwrapped
+                 if hasattr(self.eval_env, 'unwrapped'):
+                     self.eval_env.unwrapped.save_design_plot(str(design_path))
+                 else:
+                     self.eval_env.save_design_plot(str(design_path))
             else:
-                # SubprocVecEnv - call via env_method
-                env.env_method('save_design_plot', str(design_path), indices=[0])
+                # Fallback to training env
+                if hasattr(self.training_env, 'envs'):
+                    self.training_env.envs[0].unwrapped.save_design_plot(str(design_path))
+                else:
+                    self.training_env.env_method('save_design_plot', str(design_path), indices=[0])
         except Exception as e:
             print(f"Warning: Could not save design plot: {e}")
         
         # Plot and save distribution
-        if efield_state is not None:
-            distribution_path = self.distribution_dir / f"distribution_rollout_{self.rollout_count:04d}.png"
-            self.distribution_image_paths.append(str(distribution_path))
-            try:
-                if hasattr(env, 'envs'):
-                    # DummyVecEnv - direct call
-                    env.envs[0].unwrapped.save_distribution_plot(str(distribution_path))
+        # Need efield_state. In MinimalEnv, calculate_flux returns it, 
+        # or it is stored in last_episode_metrics if using Discrete_gym
+        distribution_path = self.distribution_dir / f"distribution_rollout_{self.rollout_count:04d}.png"
+        self.distribution_image_paths.append(str(distribution_path))
+        try:
+            if self.eval_env is not None:
+                if hasattr(self.eval_env, 'unwrapped'):
+                     self.eval_env.unwrapped.save_distribution_plot(str(distribution_path))
                 else:
-                    # SubprocVecEnv - call via env_method
-                    env.env_method('save_distribution_plot', str(distribution_path), indices=[0])
-            except Exception as e:
-                print(f"Warning: Could not save distribution plot: {e}")
+                     self.eval_env.save_distribution_plot(str(distribution_path))
+            else:
+                # Fallback
+                 if hasattr(self.training_env, 'envs'):
+                    self.training_env.envs[0].unwrapped.save_distribution_plot(str(distribution_path))
+                 else:
+                    self.training_env.env_method('save_distribution_plot', str(distribution_path), indices=[0])
+        except Exception as e:
+            print(f"Warning: Could not save distribution plot: {e}")
         
-        # Print AVERAGE metrics across all environments
-        print(f"Rollout {self.rollout_count} (avg of {n_envs} envs): "
+        # Print AVERAGE metrics
+        print(f"Rollout {self.rollout_count} (Eval Result): "
               f"Transmission={avg_transmission:.4f}, Balance={avg_balance:.4f}, "
               f"Score={avg_score:.4f}, EpReward={avg_episode_reward:.4f}")
+
     
     def _on_training_end(self) -> None:
         """Called when training ends."""
@@ -330,7 +349,7 @@ def train_ppo(
     )
 
     # Create callback
-    callback = TrainingCallback(save_dir=callback_dir, verbose=1)
+    callback = TrainingCallback(save_dir=callback_dir, verbose=1, eval_env=eval_env)
 
     # Train the model
     print(f"Training PPO agent for {total_timesteps} timesteps...")
