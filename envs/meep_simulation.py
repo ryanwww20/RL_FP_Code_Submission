@@ -730,7 +730,7 @@ class WaveguideSimulation:
         
         return transmission_1, transmission_2, total_transmission, diff_transmission
 
-    def plot_design(self, matrix=None, save_path=None, show_plot=True):
+    def plot_design(self, matrix=None, save_path=None, show_plot=True, title_suffix=None):
         """
         Plot and visualize the simulation results (Ez field + geometry overlays).
         This version includes input/output waveguides and the output measurement plane.
@@ -740,6 +740,7 @@ class WaveguideSimulation:
                            If provided, will overlay material distribution as grey boxes.
             save_path: Path to save the plot
             show_plot: Whether to display the plot
+            title_suffix: Optional suffix to add to the title (e.g., "Rollout 5")
         """
         if self.hz_data is None:
             self.get_hzfield_data()
@@ -764,8 +765,13 @@ class WaveguideSimulation:
         plt.colorbar(label='Hz (electric field)')
         plt.xlabel('x (microns)')
         plt.ylabel('y (microns)')
-        plt.title(
-            f'Waveguide Simulation - Hz Field (L_in={self.input_coupler_length}µm, L_out={self.output_coupler_length}µm)')
+        
+        # Build title
+        base_title = f'Waveguide Simulation - Hz Field (L_in={self.input_coupler_length}µm, L_out={self.output_coupler_length}µm)'
+        if title_suffix:
+            plt.title(f'{base_title}\n{title_suffix}')
+        else:
+            plt.title(base_title)
 
         # --- 0. Overlay Material Matrix (if provided) ---
         silicon_label_added = False
@@ -896,7 +902,7 @@ class WaveguideSimulation:
         else:
             plt.close()
 
-    def plot_distribution(self, efield_state, save_path=None, show_plot=True):
+    def plot_distribution(self, efield_state, save_path=None, show_plot=True, title_suffix=None):
         """
         Plot the electric field distribution along the output plane.
 
@@ -904,6 +910,7 @@ class WaveguideSimulation:
             efield_state: 1D array of |Ez|^2 values at each detector position
             save_path: Optional path to save the plot
             show_plot: Whether to display the plot
+            title_suffix: Optional suffix to add to the title (e.g., "Rollout 5")
         """
         # Use y-coordinates as x-axis if available
         if len(self.efield_region_y_positions) == len(efield_state):
@@ -919,7 +926,14 @@ class WaveguideSimulation:
                  linewidth=2, label='Electric Field |Ez|²')
         plt.xlabel(x_label)
         plt.ylabel('|Ez|²')
-        plt.title('Electric Field Distribution at Output Plane')
+        
+        # Build title
+        base_title = 'Electric Field Distribution at Output Plane'
+        if title_suffix:
+            plt.title(f'{base_title}\n{title_suffix}')
+        else:
+            plt.title(base_title)
+        
         plt.legend()
         plt.grid(True, alpha=0.3)
 

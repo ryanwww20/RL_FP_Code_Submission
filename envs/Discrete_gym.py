@@ -209,7 +209,7 @@ class MinimalEnv(gym.Env):
             'current_score': current_score,
         }
 
-    def save_design_plot(self, save_path):
+    def save_design_plot(self, save_path, title_suffix=None):
         """Save design plot to file (called from subprocess).
         Uses last completed episode's design if available."""
         if self.last_episode_metrics is not None:
@@ -219,10 +219,11 @@ class MinimalEnv(gym.Env):
         self.simulation.plot_design(
             matrix=matrix,
             save_path=save_path,
-            show_plot=False
+            show_plot=False,
+            title_suffix=title_suffix
         )
 
-    def save_distribution_plot(self, save_path):
+    def save_distribution_plot(self, save_path, title_suffix=None):
         """Save distribution plot to file (called from subprocess).
         Uses last completed episode's efield if available."""
         if self.last_episode_metrics is not None:
@@ -232,5 +233,6 @@ class MinimalEnv(gym.Env):
         self.simulation.plot_distribution(
             efield_state=efield_state,
             save_path=save_path,
-            show_plot=False
+            show_plot=False,
+            title_suffix=title_suffix
         )

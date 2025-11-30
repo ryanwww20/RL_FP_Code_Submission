@@ -130,20 +130,21 @@ class TrainingCallback(BaseCallback):
         # Plot and save design (use evaluation environment)
         design_path = self.design_dir / f"design_rollout_{self.rollout_count:04d}.png"
         self.design_image_paths.append(str(design_path))
+        title_suffix = f"Rollout {self.rollout_count}"
         try:
             if self.eval_env is not None:
                  # MinimalEnv has save_design_plot method
                  # If wrapped in Monitor/DummyVecEnv, might need unwrapped
                  if hasattr(self.eval_env, 'unwrapped'):
-                     self.eval_env.unwrapped.save_design_plot(str(design_path))
+                     self.eval_env.unwrapped.save_design_plot(str(design_path), title_suffix=title_suffix)
                  else:
-                     self.eval_env.save_design_plot(str(design_path))
+                     self.eval_env.save_design_plot(str(design_path), title_suffix=title_suffix)
             else:
                 # Fallback to training env
                 if hasattr(self.training_env, 'envs'):
-                    self.training_env.envs[0].unwrapped.save_design_plot(str(design_path))
+                    self.training_env.envs[0].unwrapped.save_design_plot(str(design_path), title_suffix=title_suffix)
                 else:
-                    self.training_env.env_method('save_design_plot', str(design_path), indices=[0])
+                    self.training_env.env_method('save_design_plot', str(design_path), title_suffix, indices=[0])
         except Exception as e:
             print(f"Warning: Could not save design plot: {e}")
         
@@ -155,15 +156,15 @@ class TrainingCallback(BaseCallback):
         try:
             if self.eval_env is not None:
                 if hasattr(self.eval_env, 'unwrapped'):
-                     self.eval_env.unwrapped.save_distribution_plot(str(distribution_path))
+                     self.eval_env.unwrapped.save_distribution_plot(str(distribution_path), title_suffix=title_suffix)
                 else:
-                     self.eval_env.save_distribution_plot(str(distribution_path))
+                     self.eval_env.save_distribution_plot(str(distribution_path), title_suffix=title_suffix)
             else:
                 # Fallback
                  if hasattr(self.training_env, 'envs'):
-                    self.training_env.envs[0].unwrapped.save_distribution_plot(str(distribution_path))
+                    self.training_env.envs[0].unwrapped.save_distribution_plot(str(distribution_path), title_suffix=title_suffix)
                  else:
-                    self.training_env.env_method('save_distribution_plot', str(distribution_path), indices=[0])
+                    self.training_env.env_method('save_distribution_plot', str(distribution_path), title_suffix, indices=[0])
         except Exception as e:
             print(f"Warning: Could not save distribution plot: {e}")
         
@@ -171,38 +172,58 @@ class TrainingCallback(BaseCallback):
         print(f"Rollout {self.rollout_count} (Eval Result): "
               f"Transmission={avg_transmission:.4f}, Balance={avg_balance:.4f}, "
               f"Score={avg_score:.4f}, EpReward={avg_episode_reward:.4f}")
+        
+        # Update GIFs and plots after each rollout
+        self._update_gifs_and_plots()
+
+    def _update_gifs_and_plots(self):
+        """Update GIFs and metric plots with current data."""
+        # Create/update design GIF
+        if self.design_image_paths:
+            gif_path = self.img_dir / "design.gif"
+            self._create_gif(self.design_image_paths, str(gif_path))
+        
+        # Create/update distribution GIF
+        if self.distribution_image_paths:
+            gif_path = self.img_dir / "flux.gif"
+            self._create_gif(self.distribution_image_paths, str(gif_path))
+        
+        # Update metric plots
+        self._plot_metrics(verbose=False)
 
     
     def _on_training_end(self) -> None:
         """Called when training ends."""
-        print(f"\nTraining ended. Creating GIFs and plots...")
+        print(f"\nTraining ended. Creating final GIFs and plots...")
         
-        # Create design GIF (save to img/design.gif as per README)
+        # Create final design GIF (save to img/design.gif as per README)
         if self.design_image_paths:
             gif_path = self.img_dir / "design.gif"
             self._create_gif(self.design_image_paths, str(gif_path))
             print(f"Design GIF saved to: {gif_path}")
         
-        # Create distribution GIF (save to img/flux.gif as per README)
+        # Create final distribution GIF (save to img/flux.gif as per README)
         if self.distribution_image_paths:
             gif_path = self.img_dir / "flux.gif"
             self._create_gif(self.distribution_image_paths, str(gif_path))
             print(f"Distribution GIF saved to: {gif_path}")
         
-        # Clean up temporary image directories
-        import shutil
-        if self.design_dir.exists():
-            shutil.rmtree(self.design_dir)
-        if self.distribution_dir.exists():
-            shutil.rmtree(self.distribution_dir)
+        # Plot final metrics from CSV
+        self._plot_metrics(verbose=True)
         
-        # Plot recorded metrics from CSV
-        self._plot_metrics()
+        # Note: We keep the image directories for reference
+        # If you want to clean them up, uncomment below:
+        # import shutil
+        # if self.design_dir.exists():
+        #     shutil.rmtree(self.design_dir)
+        # if self.distribution_dir.exists():
+        #     shutil.rmtree(self.distribution_dir)
     
-    def _plot_metrics(self):
+    def _plot_metrics(self, verbose=True):
         """Plot transmission, balance_score, and score from CSV."""
         if not self.csv_path.exists():
-            print("Warning: CSV file not found, cannot plot metrics")
+            if verbose:
+                print("Warning: CSV file not found, cannot plot metrics")
             return
         
         try:
@@ -210,7 +231,8 @@ class TrainingCallback(BaseCallback):
             df = pd.read_csv(self.csv_path)
             
             if len(df) == 0:
-                print("Warning: CSV file is empty, cannot plot metrics")
+                if verbose:
+                    print("Warning: CSV file is empty, cannot plot metrics")
                 return
             
             # Plot transmission
@@ -224,7 +246,8 @@ class TrainingCallback(BaseCallback):
             transmission_plot_path = self.plot_dir / "transmission.png"
             plt.savefig(transmission_plot_path, dpi=150, bbox_inches='tight')
             plt.close()
-            print(f"Transmission plot saved to: {transmission_plot_path}")
+            if verbose:
+                print(f"Transmission plot saved to: {transmission_plot_path}")
             
             # Plot balance score
             plt.figure(figsize=(10, 6))
@@ -237,7 +260,8 @@ class TrainingCallback(BaseCallback):
             balance_plot_path = self.plot_dir / "balance.png"
             plt.savefig(balance_plot_path, dpi=150, bbox_inches='tight')
             plt.close()
-            print(f"Balance score plot saved to: {balance_plot_path}")
+            if verbose:
+                print(f"Balance score plot saved to: {balance_plot_path}")
             
             # Plot score
             plt.figure(figsize=(10, 6))
@@ -250,10 +274,12 @@ class TrainingCallback(BaseCallback):
             score_plot_path = self.plot_dir / "score.png"
             plt.savefig(score_plot_path, dpi=150, bbox_inches='tight')
             plt.close()
-            print(f"Score plot saved to: {score_plot_path}")
+            if verbose:
+                print(f"Score plot saved to: {score_plot_path}")
             
         except Exception as e:
-            print(f"Error plotting metrics: {e}")
+            if verbose:
+                print(f"Error plotting metrics: {e}")
     
     def _create_gif(self, image_paths, output_path, duration=500, loop=0):
         """Create a GIF from a list of image paths."""
