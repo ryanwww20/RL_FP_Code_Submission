@@ -17,6 +17,7 @@ playground/
 models/
 playground/
 archive/
+eval_results/
 
 .DS_Store
 
