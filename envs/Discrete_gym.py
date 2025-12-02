@@ -266,7 +266,7 @@ class MinimalEnv(gym.Env):
             diff_ratio = 1.0  # If no transmission, balance is worst
         balance_score = max(1 - diff_ratio, 0)
 
-        current_score = transmission_score * balance_score
+        current_score = transmission_score / 100 +  balance_score * 10
         reward = current_score - self.last_score if self.last_score is not None else 0
         self.last_score = current_score
 
