@@ -67,9 +67,9 @@ class WaveguideSimulation:
         self.sim = None
         self.hz_data = None
         
-        # Electric field monitor for state
-        self.efield_monitor = None  # Electric field monitor for state (along y-axis)
-        self.efield_region_y_positions = []  # Y-coordinates of state efield monitor
+        # Magnetic field monitor for state
+        self.hzfield_monitor = None  # Magnetic field monitor for state (along y-axis)
+        self.hzfield_region_y_positions = []  # Y-coordinates of state hzfield monitor
         self.input_flux_region = None  # Input mode flux monitor
         self.output_flux_region_1 = None  # Output mode flux monitor 1
         self.output_flux_region_2 = None  # Output mode flux monitor 2
@@ -325,7 +325,8 @@ class WaveguideSimulation:
                     eig_band=1,
                     direction=mp.NO_DIRECTION,
                     eig_kpoint=mp.Vector3(1, 0, 0),  # +X direction (rightward)
-                    eig_match_freq=True
+                    eig_match_freq=True,
+                    eig_parity=mp.EVEN_Z  # TE mode (Hz polarization)
                 )]
         finally:
             os.dup2(old_stdout_fd, 1)
@@ -387,13 +388,13 @@ class WaveguideSimulation:
 
         return self.sim
 
-    def add_efield_monitor_state(self):
+    def add_hzfield_monitor_state(self):
         """
-        Add electric field monitor along y-axis at a specific x position for state observation.
-        Uses DFT (Discrete Fourier Transform) to monitor the electric field.
+        Add magnetic field monitor along y-axis at a specific x position for state observation.
+        Uses DFT (Discrete Fourier Transform) to monitor the magnetic field.
 
         Returns:
-            DFT field monitor object
+            DFT magnetic field monitor object
         """
         if self.sim is None:
             raise ValueError(
@@ -412,26 +413,26 @@ class WaveguideSimulation:
         y_positions = np.linspace(y_min, y_max, self.num_flux_regions)
         
         # Store y positions for plotting
-        self.efield_region_y_positions = y_positions.copy()
+        self.hzfield_region_y_positions = y_positions.copy()
 
-        # Create DFT field monitor for electric field (Ez component for 2D TM mode)
+        # Create DFT field monitor for magnetic field (Hz component for 2D TE mode)
         # The monitor is a vertical line at x = state_output_x
-        efield_region = mp.Volume(
+        field_region = mp.Volume(
             center=mp.Vector3(self.state_output_x, 0, 0),
             size=mp.Vector3(0, self.cell_size.y, 0)  # Vertical line spanning full height
         )
         
-        # Add DFT fields monitor for Ez component
+        # Add DFT fields monitor for Hz component (TE mode)
         # For single frequency, use fcen, df, nfreq format (3 numbers)
         # fcen = center frequency, df = frequency width, nfreq = number of frequencies
-        self.efield_monitor = self.sim.add_dft_fields(
-            [mp.Ez],  # Monitor Ez component (for 2D TM mode)
+        self.hzfield_monitor = self.sim.add_dft_fields(
+            [mp.Hz],  # Monitor Hz component (for 2D TE mode)
             frequency, 0.0, 1,  # fcen, df, nfreq (single frequency: center freq, zero width, 1 frequency)
-            center=efield_region.center,
-            size=efield_region.size
+            center=field_region.center,
+            size=field_region.size
         )
         
-        return self.efield_monitor
+        return self.hzfield_monitor
 
     def add_flux_monitor_input_mode(self):
         """
@@ -513,55 +514,55 @@ class WaveguideSimulation:
             frequency, 0, 1, self.design_region_flux_region_right)
         return self.design_region_flux_region_up, self.design_region_flux_region_down, self.design_region_flux_region_left, self.design_region_flux_region_right
 
-    def get_efield_state(self):
+    def get_hzfield_state(self):
         """
-        Get electric field values for state monitor (along y-axis).
-        Returns the magnitude squared of the electric field (|Ez|^2).
+        Get magnetic field values for state monitor (along y-axis).
+        Returns the magnitude squared of the magnetic field (|Hz|^2) for TE mode.
 
         Returns:
-            efield_state: array of |Ez|^2 values at each y position
+            hz_field_state: array of |Hz|^2 values at each y position
         """
-        if self.efield_monitor is None:
+        if self.hzfield_monitor is None:
             raise ValueError(
-                "No electric field monitor. Call add_efield_monitor_state() first.")
+                "No hz field monitor. Call add_hzfield_monitor_state() first.")
 
         # Get electric field data from DFT monitor
         # get_dft_array returns the field data as a numpy array
         # For a vertical line monitor, this should be a 1D array along y
-        efield_data = self.sim.get_dft_array(self.efield_monitor, mp.Ez, 0)
+        hzfield_data = self.sim.get_dft_array(self.hzfield_monitor, mp.Hz, 0)
         
         # Extract values along the y-axis
         # For a vertical line monitor, Meep typically returns a 1D array
-        if efield_data.ndim == 1:
+        if hzfield_data.ndim == 1:
             # Direct 1D array along y-axis
-            efield_values = np.abs(efield_data) ** 2
-        elif efield_data.ndim == 2:
+            hzfield_values = np.abs(hzfield_data) ** 2
+        elif hzfield_data.ndim == 2:
             # If 2D, extract the column (for vertical line, should be single column)
             # Take the middle column or first column depending on shape
-            if efield_data.shape[1] == 1:
-                efield_values = np.abs(efield_data[:, 0]) ** 2
+            if hzfield_data.shape[1] == 1:
+                hzfield_values = np.abs(hzfield_data[:, 0]) ** 2
             else:
                 # Multiple columns - take middle column
-                mid_x = efield_data.shape[1] // 2
-                efield_values = np.abs(efield_data[:, mid_x]) ** 2
+                mid_x = hzfield_data.shape[1] // 2
+                hzfield_values = np.abs(hzfield_data[:, mid_x]) ** 2
         else:
             # Fallback: flatten and take first num_flux_regions elements
-            efield_values = np.abs(efield_data.flatten()[:self.num_flux_regions]) ** 2
+            hzfield_values = np.abs(hzfield_data.flatten()[:self.num_flux_regions]) ** 2
         
         # Ensure we have the right number of values
-        if len(efield_values) != self.num_flux_regions:
+        if len(hzfield_values) != self.num_flux_regions:
             # Resample to match num_flux_regions
-            if len(efield_values) > self.num_flux_regions:
+            if len(hzfield_values) > self.num_flux_regions:
                 # Downsample by taking evenly spaced indices
-                indices = np.linspace(0, len(efield_values) - 1, self.num_flux_regions, dtype=int)
-                efield_values = efield_values[indices]
+                indices = np.linspace(0, len(hzfield_values) - 1, self.num_flux_regions, dtype=int)
+                hzfield_values = hzfield_values[indices]
             else:
                 # Upsample by linear interpolation using numpy
-                old_indices = np.linspace(0, 1, len(efield_values))
+                old_indices = np.linspace(0, 1, len(hzfield_values))
                 new_indices = np.linspace(0, 1, self.num_flux_regions)
-                efield_values = np.interp(new_indices, old_indices, efield_values)
+                hzfield_values = np.interp(new_indices, old_indices, hzfield_values)
 
-        return np.array(efield_values)
+        return np.array(hzfield_values)
 
     def get_flux_input_mode(self, band_num=1):
         """
@@ -902,33 +903,33 @@ class WaveguideSimulation:
         else:
             plt.close()
 
-    def plot_distribution(self, efield_state, save_path=None, show_plot=True, title_suffix=None):
+    def plot_distribution(self, hzfield_state, save_path=None, show_plot=True, title_suffix=None):
         """
         Plot the electric field distribution along the output plane.
 
         Args:
-            efield_state: 1D array of |Ez|^2 values at each detector position
+            hzfield_state: 1D array of |Hz|^2 values at each detector position
             save_path: Optional path to save the plot
             show_plot: Whether to display the plot
             title_suffix: Optional suffix to add to the title (e.g., "Rollout 5")
         """
         # Use y-coordinates as x-axis if available
-        if len(self.efield_region_y_positions) == len(efield_state):
-            x_data = self.efield_region_y_positions
+        if len(self.hzfield_region_y_positions) == len(hzfield_state):
+            x_data = self.hzfield_region_y_positions
             x_label = 'Y Position (μm)'
         else:
             # Fallback to index if y positions not available
-            x_data = np.arange(len(efield_state))
+            x_data = np.arange(len(hzfield_state))
             x_label = 'Detector Index'
         
         plt.figure(figsize=(10, 6))
-        plt.plot(x_data, efield_state, 'b-',
-                 linewidth=2, label='Electric Field |Ez|²')
+        plt.plot(x_data, hzfield_state, 'b-',
+                 linewidth=2, label='Magnetic Field |Hz|²')
         plt.xlabel(x_label)
-        plt.ylabel('|Ez|²')
+        plt.ylabel('|Hz|²')
         
         # Build title
-        base_title = 'Electric Field Distribution at Output Plane'
+        base_title = 'Magnetic Field Distribution at Output Plane'
         if title_suffix:
             plt.title(f'{base_title}\n{title_suffix}')
         else:
@@ -944,7 +945,7 @@ class WaveguideSimulation:
                 if save_dir and not os.path.exists(save_dir):
                     os.makedirs(save_dir, exist_ok=True)
                 plt.savefig(save_path, dpi=150, bbox_inches='tight')
-                print(f"Electric field distribution plot saved to '{save_path}'")
+                print(f"Magnetic field distribution plot saved to '{save_path}'")
             except (FileNotFoundError, OSError) as e:
                 print(f"Warning: Could not save plot to '{save_path}': {e}")
             except Exception as e:
@@ -963,7 +964,7 @@ class WaveguideSimulation:
             matrix: Material matrix (pixel_num_x x pixel_num_y), 1=silicon, 0=silica
             
         Returns:
-            (input_mode_flux, output_mode_flux_1, output_mode_flux_2, efield_state, hz_data, 
+            (input_mode_flux, output_mode_flux_1, output_mode_flux_2, hzfield_state, hz_data, 
              input_mode, output_mode_1, output_mode_2)
         """
         # Create geometry with material matrix
@@ -971,7 +972,7 @@ class WaveguideSimulation:
 
         # Create simulation and add monitors
         self.create_simulation()
-        self.add_efield_monitor_state()
+        self.add_hzfield_monitor_state()
         self.add_flux_monitor_input_mode()
         self.add_flux_monitor_output_mode()
 
@@ -979,7 +980,7 @@ class WaveguideSimulation:
         self.run()
 
         # Get electric field state (distribution along y-axis)
-        efield_state = self.get_efield_state()  # Returns |Ez|^2 values
+        hzfield_state = self.get_hzfield_state()  # Returns |Hz|^2 values
         
         # Get input and output flux values and mode coefficients (using existing functions)
         input_mode_flux, input_mode = self.get_flux_input_mode(band_num=1)
@@ -988,7 +989,7 @@ class WaveguideSimulation:
         # Get field data
         hz_data = self.get_hzfield_data()
 
-        return input_mode_flux, output_mode_flux_1, output_mode_flux_2, efield_state, hz_data, input_mode, output_mode_1, output_mode_2
+        return input_mode_flux, output_mode_flux_1, output_mode_flux_2, hzfield_state, hz_data, input_mode, output_mode_1, output_mode_2
 
 
 if __name__ == "__main__":
@@ -1010,7 +1011,7 @@ if __name__ == "__main__":
     
     # 3. Run simulation and get results
     results = sim.calculate_flux(matrix)
-    input_mode_flux, output_mode_flux_1, output_mode_flux_2, efield_state, hz_data, input_mode, output_mode_1, output_mode_2 = results
+    input_mode_flux, output_mode_flux_1, output_mode_flux_2, hzfield_state, hz_data, input_mode, output_mode_1, output_mode_2 = results
     
     # 4. Display results
     trans_1, trans_2, total_trans, diff_trans = sim.get_output_transmission(band_num=1)
@@ -1019,5 +1020,5 @@ if __name__ == "__main__":
     # Optional: Plot results
     sim.plot_design(matrix=matrix, show_plot=true, 
                    save_path='sample_img/field_result.png')
-    sim.plot_distribution(efield_state=efield_state,
-                         save_path='sample_img/efield_distribution.png', show_plot=False)
+    sim.plot_distribution(hzfield_state=hzfield_state,
+                         save_path='sample_img/hzfield_distribution.png', show_plot=False)
