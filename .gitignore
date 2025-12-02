@@ -21,4 +21,6 @@ eval_results/
 
 .DS_Store
 
+job_log/
+
 job.sh
