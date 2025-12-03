@@ -244,6 +244,7 @@ class MinimalEnv(gym.Env):
                 'transmission_2': self._step_metrics['transmission_2'],
                 'balance_score': self._step_metrics['balance_score'],
                 'current_score': self._step_metrics['current_score'],
+                'similarity_score': self._step_metrics.get('similarity_score', 0.0),
             }
 
         # Get observation - return the current hzfield_state as observation
@@ -364,6 +365,7 @@ class MinimalEnv(gym.Env):
             'transmission_2': transmission_2,
             'balance_score': balance_score,
             'current_score': current_score,
+            'similarity_score': 0.0,  # Fallback: similarity not available in get_current_metrics
         }
 
     def save_design_plot(self, save_path, title_suffix=None):
