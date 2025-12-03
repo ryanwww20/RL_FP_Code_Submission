@@ -93,44 +93,25 @@ class MinimalEnv(gym.Env):
 
     def _get_previous_layers_state(self):
         """
-        Get the average of the previous 3 layers.
+        Get the previous layer (the layer before the current one).
         A layer is one row (20 pixels in +y direction).
-        If fewer than 3 layers exist, pad with default waveguide pattern.
+        For the first layer, returns the input waveguide pattern.
         
         Returns:
-            1D array of length pixel_num_y (20 values: averaged across 3 layers)
+            1D array of length pixel_num_y (20 values: the previous layer)
         """
-        previous_layers = []
+        # Get the previous layer
+        # For first layer (material_matrix_idx == 0), use input waveguide pattern
+        # For subsequent layers, get from material_matrix
+        if self.material_matrix_idx == 0:
+            # First layer: use input waveguide pattern as previous layer
+            previous_layer = self._get_default_waveguide_layer()
+        else:
+            # Get the previous layer from material_matrix
+            # material_matrix_idx has been incremented, so previous is at idx - 1
+            previous_layer = self.material_matrix[self.material_matrix_idx - 1].copy()
         
-        # Get previous layers from layer_history
-        # layer_history stores individual layers (rows), with newest at the end (after append)
-        history_len = len(self.layer_history)
-        
-        for i in range(self.num_previous_layers):
-            # We want the 3 most recent layers
-            # i=0: oldest of the 3 most recent (or default if not enough history)
-            # i=1: middle of the 3 most recent (or default if not enough history)
-            # i=2: newest of the 3 most recent (or default if not enough history)
-            layer_idx = history_len - self.num_previous_layers + i
-            
-            if layer_idx >= 0 and layer_idx < history_len:
-                # Use actual layer from history (1D array of length pixel_num_y)
-                # layer_history[0] is oldest, layer_history[-1] is newest
-                layer = self.layer_history[layer_idx].copy()
-            else:
-                # Use default waveguide pattern (not enough history yet)
-                layer = self._get_default_waveguide_layer()
-            
-            # Append layer (already 1D, length pixel_num_y)
-            previous_layers.append(layer)
-        
-        # Stack layers and compute average across the 3 layers
-        # previous_layers is a list of 3 arrays, each of length pixel_num_y
-        # Stack them into a 2D array (3 x pixel_num_y), then average along axis 0
-        layers_array = np.stack(previous_layers, axis=0)  # Shape: (3, pixel_num_y)
-        averaged_layers = np.mean(layers_array, axis=0)  # Shape: (pixel_num_y,) = (20,)
-        
-        return averaged_layers.astype(np.float32)
+        return previous_layer.astype(np.float32)
 
     def _get_previous_layer(self):
         """
@@ -198,11 +179,11 @@ class MinimalEnv(gym.Env):
         else:
             hzfield_state_normalized = hzfield_state  # If all zeros, keep as is
         
-        # Build observation: 10 monitors + matrix index + averaged previous 3 layers
+        # Build observation: 10 monitors + matrix index + previous layer
         observation = hzfield_state_normalized.copy().astype(np.float32)  # 10 monitor values (normalized)
         observation = np.append(observation, float(self.material_matrix_idx))  # 1 matrix index
-        previous_layers_avg = self._get_previous_layers_state()  # 20 values (averaged across 3 layers)
-        observation = np.append(observation, previous_layers_avg)
+        previous_layer = self._get_previous_layers_state()  # 20 values (previous layer)
+        observation = np.append(observation, previous_layer)
         
         info = {}
 
@@ -275,11 +256,11 @@ class MinimalEnv(gym.Env):
             else:
                 hzfield_state_normalized = hzfield_state  # If all zeros, keep as is
             
-            # Build observation: 10 monitors + matrix index + averaged previous 3 layers
+            # Build observation: 10 monitors + matrix index + previous layer
             observation = hzfield_state_normalized.copy().astype(np.float32)  # 10 monitor values (normalized)
             observation = np.append(observation, float(self.material_matrix_idx))  # 1 matrix index
-            previous_layers_avg = self._get_previous_layers_state()  # 20 values (averaged across 3 layers)
-            observation = np.append(observation, previous_layers_avg)
+            previous_layer = self._get_previous_layers_state()  # 20 values (previous layer)
+            observation = np.append(observation, previous_layer)
         else:
             # Initial state: return zeros (shouldn't happen after reset, but just in case)
             observation = np.zeros(self.obs_size, dtype=np.float32)
