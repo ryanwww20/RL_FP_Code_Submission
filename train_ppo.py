@@ -18,6 +18,8 @@ from envs.Discrete_gym import MinimalEnv
 from PIL import Image
 from eval import ModelEvaluator
 
+from matplotlib import rcParams
+
 CONFIG_ENV_VAR = "TRAINING_CONFIG_PATH"
 DEFAULT_CONFIG_PATH = Path(__file__).resolve().parent / "config.yaml"
 TRAIN_PPO_KWARGS = {
@@ -43,7 +45,7 @@ class TrainingCallback(BaseCallback):
     Callback to record metrics, plot designs, save to CSV, and create GIFs.
     Follows README structure: ppo_model_log_<start_time>/ with img/, plot/, result.csv
     """
-    def __init__(self, save_dir, verbose=1, eval_env=None, model_save_path=None, eval_freq=5):
+    def __init__(self, save_dir, verbose=1, eval_env=None, model_save_path=None, eval_freq=5, rolling_window=5):
         super(TrainingCallback, self).__init__(verbose)
         self.save_dir = Path(save_dir)
         self.save_dir.mkdir(parents=True, exist_ok=True)
@@ -51,6 +53,7 @@ class TrainingCallback(BaseCallback):
         self.eval_env = eval_env
         self.model_save_path = model_save_path  # Path to save best model
         self.eval_freq = eval_freq  # Run full evaluation every N rollouts
+        self.rolling_window = max(1, int(rolling_window))  # Window size for moving-average plots
         
         # Best model tracking (based on evaluation score)
         self.best_eval_score = -float('inf')
@@ -282,6 +285,10 @@ class TrainingCallback(BaseCallback):
         #     shutil.rmtree(self.distribution_dir)
     
     def _plot_metrics(self, verbose=True):
+        plt.style.use("seaborn-v0_8")
+
+        rcParams['figure.figsize'] = (10, 5)
+        rcParams['font.size'] = 13
         """Plot transmission, balance_score, and score from CSV (both train and eval)."""
         if not self.train_csv_path.exists():
             if verbose:
@@ -301,73 +308,45 @@ class TrainingCallback(BaseCallback):
             train_df = df[df['type'] == 'train']
             eval_df = df[df['type'] == 'eval']
             
-            # Plot transmission (train + eval)
-            plt.figure(figsize=(12, 6))
-            if len(train_df) > 0:
-                plt.plot(train_df['rollout_count'], train_df['transmission'], 
-                        'b-', linewidth=1.5, marker='o', markersize=3, alpha=0.7, label='Train (avg)')
-            if len(eval_df) > 0:
-                plt.plot(eval_df['rollout_count'], eval_df['transmission'], 
-                        'r-', linewidth=2, marker='s', markersize=5, label='Eval (deterministic)')
-            plt.xlabel('Rollout Count')
-            plt.ylabel('Transmission')
-            plt.title('Transmission Over Training')
-            plt.legend()
-            plt.grid(True, alpha=0.3)
-            plt.tight_layout()
-            plt.savefig(self.plot_dir / "transmission.png", dpi=150, bbox_inches='tight')
-            plt.close()
+            def plot_metric(metric, title, ylabel, filename):
+                plt.figure(figsize=(12, 6))
+                plotted = False
+                
+                if len(train_df) > 0:
+                    t = train_df.sort_values('rollout_count')
+                    x = t['rollout_count']
+                    y = t[metric]
+                    plt.plot(x, y, 'b-o', linewidth=1.5, markersize=3, alpha=0.35, label='Train (raw)')
+                    y_ma = y.rolling(window=self.rolling_window, min_periods=1).mean()
+                    plt.plot(x, y_ma, 'b-', linewidth=2.2, label=f'Train MA (w={self.rolling_window})')
+                    plotted = True
+                
+                if len(eval_df) > 0:
+                    e = eval_df.sort_values('rollout_count')
+                    x = e['rollout_count']
+                    y = e[metric]
+                    plt.plot(x, y, 'r-s', linewidth=1.5, markersize=4, alpha=0.35, label='Eval (raw)')
+                    y_ma = y.rolling(window=self.rolling_window, min_periods=1).mean()
+                    plt.plot(x, y_ma, 'r-', linewidth=2.2, label=f'Eval MA (w={self.rolling_window})')
+                    plotted = True
+                
+                if not plotted:
+                    plt.close()
+                    return
+                
+                plt.xlabel('Rollout Count')
+                plt.ylabel(ylabel)
+                plt.title(title)
+                plt.legend()
+                plt.grid(True, alpha=0.3)
+                plt.tight_layout()
+                plt.savefig(self.plot_dir / filename, dpi=150, bbox_inches='tight')
+                plt.close()
             
-            # Plot balance score (train + eval)
-            plt.figure(figsize=(12, 6))
-            if len(train_df) > 0:
-                plt.plot(train_df['rollout_count'], train_df['balance_score'], 
-                        'b-', linewidth=1.5, marker='o', markersize=3, alpha=0.7, label='Train (avg)')
-            if len(eval_df) > 0:
-                plt.plot(eval_df['rollout_count'], eval_df['balance_score'], 
-                        'r-', linewidth=2, marker='s', markersize=5, label='Eval (deterministic)')
-            plt.xlabel('Rollout Count')
-            plt.ylabel('Balance Score')
-            plt.title('Balance Score Over Training')
-            plt.legend()
-            plt.grid(True, alpha=0.3)
-            plt.tight_layout()
-            plt.savefig(self.plot_dir / "balance.png", dpi=150, bbox_inches='tight')
-            plt.close()
-            
-            # Plot score (train + eval)
-            plt.figure(figsize=(12, 6))
-            if len(train_df) > 0:
-                plt.plot(train_df['rollout_count'], train_df['score'], 
-                        'b-', linewidth=1.5, marker='o', markersize=3, alpha=0.7, label='Train (avg)')
-            if len(eval_df) > 0:
-                plt.plot(eval_df['rollout_count'], eval_df['score'], 
-                        'r-', linewidth=2, marker='s', markersize=5, label='Eval (deterministic)')
-            plt.xlabel('Rollout Count')
-            plt.ylabel('Score')
-            plt.title('Score Over Training')
-            plt.legend()
-            plt.grid(True, alpha=0.3)
-            plt.tight_layout()
-            plt.savefig(self.plot_dir / "score.png", dpi=150, bbox_inches='tight')
-            plt.close()
-            
-            # Plot reward (train + eval)
-            plt.figure(figsize=(12, 6))
-            if len(train_df) > 0:
-                plt.plot(train_df['rollout_count'], train_df['reward'], 
-                        'b-', linewidth=1.5, marker='o', markersize=3, alpha=0.7, label='Train (avg)')
-            if len(eval_df) > 0:
-                plt.plot(eval_df['rollout_count'], eval_df['reward'], 
-                        'r-', linewidth=2, marker='s', markersize=5, label='Eval (deterministic)')
-            plt.xlabel('Rollout Count')
-            plt.ylabel('Reward')
-            plt.title('Reward Over Training')
-            plt.legend()
-            plt.grid(True, alpha=0.3)
-            plt.tight_layout()
-            plt.savefig(self.plot_dir / "reward.png", dpi=150, bbox_inches='tight')
-            plt.close()
+            plot_metric('transmission_score', 'Transmission Score Over Training', 'Transmission Score', 'transmission.png')
+            plot_metric('balance_score', 'Balance Score Over Training', 'Balance Score', 'balance.png')
+            plot_metric('score', 'Score Over Training', 'Score', 'score.png')
+            plot_metric('reward', 'Reward Over Training', 'Reward', 'reward.png')
             
             if verbose:
                 print(f"Metric plots saved to: {self.plot_dir}")

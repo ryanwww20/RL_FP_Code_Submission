@@ -17,16 +17,18 @@ class ModelEvaluator:
     """
     Class to evaluate trained RL models on the waveguide environment.
     """
-    def __init__(self, model: Union[PPO, SAC], env: gym.Env):
+    def __init__(self, model: Union[PPO, SAC], env: gym.Env, rolling_window: int = 5):
         """
         Initialize the evaluator.
         
         Args:
             model: The trained Stable-Baselines3 model (PPO or SAC)
             env: The evaluation environment
+            rolling_window: Window size for moving-average smoothing in plots
         """
         self.model = model
         self.env = env
+        self.rolling_window = max(1, int(rolling_window))
         self.results = []
         
     def evaluate(self, n_episodes: int = 10, deterministic: bool = True) -> pd.DataFrame:
@@ -152,13 +154,22 @@ class ModelEvaluator:
         """Helper to plot a single metric."""
         if metric not in self.df.columns:
             return
-            
+        
+        # Prepare x-axis
+        x = self.df['episode'] if 'episode' in self.df.columns else pd.RangeIndex(1, len(self.df) + 1)
+
+        # Moving-average smoothing (still show raw points with light alpha)
+        series = self.df[metric]
+        smooth = series.rolling(window=self.rolling_window, min_periods=1).mean()
+
         plt.figure(figsize=(10, 6))
-        plt.plot(self.df['episode'], self.df[metric], 'o-', linewidth=2)
+        plt.plot(x, series, 'o-', linewidth=1.5, alpha=0.35, label='raw')
+        plt.plot(x, smooth, '-', linewidth=2.5, label=f'MA (window={self.rolling_window})')
         plt.xlabel('Episode')
         plt.ylabel(metric.replace('_', ' ').title())
         plt.title(title)
         plt.grid(True, alpha=0.3)
+        plt.legend()
         plt.tight_layout()
         plt.savefig(output_path / f"{metric}.png")
         plt.close()
