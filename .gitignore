@@ -31,3 +31,4 @@ Slurm_User_Guide.pdf
 
 # Ignore log files with prefix rl_log
 rl_log*
+surrogate_model
