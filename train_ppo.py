@@ -107,8 +107,8 @@ class TrainingCallback(BaseCallback):
             
             # Calculate average across all environments
             n_envs = len(all_metrics)
-            train_transmission = sum(m['total_transmission'] for m in all_metrics) / n_envs
-            train_balance = sum(m['balance_score'] for m in all_metrics) / n_envs
+            train_transmission_score = sum(m['transmission_score'] for m in all_metrics) / n_envs
+            train_balance_score = sum(m['balance_score'] for m in all_metrics) / n_envs
             train_score = sum(m['current_score'] for m in all_metrics) / n_envs
             train_similarity = sum(m.get('similarity_score', 0.0) for m in all_metrics) / n_envs
             
@@ -121,19 +121,19 @@ class TrainingCallback(BaseCallback):
                 
         except Exception as e:
             print(f"Warning: Could not get training env metrics: {e}")
-            train_transmission = 0.0
-            train_balance = 0.0
+            train_transmission_score = 0.0
+            train_balance_score = 0.0
             train_score = 0.0
             train_reward = 0.0
             train_similarity = 0.0
         
         # Record training metrics to CSV
         with open(self.train_csv_path, 'a') as f:
-            f.write(f'{timestamp},{self.rollout_count},train,{train_transmission},{train_balance},{train_score},{train_reward},{train_similarity}\n')
+            f.write(f'{timestamp},{self.rollout_count},train,{train_transmission_score},{train_balance_score},{train_score},{train_reward},{train_similarity}\n')
         
         # Print training metrics
         print(f"\n[Train] Rollout {self.rollout_count} (avg of {n_envs} envs): "
-              f"Trans={train_transmission:.4f}, Bal={train_balance:.4f}, "
+              f"Trans={train_transmission_score:.4f}, Bal={train_balance_score:.4f}, "
               f"Score={train_score:.4f}, Reward={train_reward:.4f}")
         
         # ============================================================
@@ -148,29 +148,29 @@ class TrainingCallback(BaseCallback):
             
             if len(results_df) > 0:
                 metrics = results_df.iloc[0]
-                eval_transmission = metrics.get('total_mode_transmission', metrics.get('total_transmission', 0.0))
-                eval_balance = metrics.get('balance_score', 0.0)
+                eval_transmission_score = metrics.get('transmission_score', 0.0)
+                eval_balance_score = metrics.get('balance_score', 0.0)
                 eval_score = metrics.get('current_score', 0.0)
-                eval_reward = metrics.get('total_reward', 0.0)
-                eval_similarity = metrics.get('similarity_score', 0.0)
+                eval_reward = metrics.get('reward', 0.0)
+                eval_similarity_score = metrics.get('similarity_score', 0.0)
             else:
-                eval_transmission = 0.0
-                eval_balance = 0.0
+                eval_transmission_score = 0.0
+                eval_balance_score = 0.0
                 eval_score = 0.0
                 eval_reward = 0.0
                 eval_similarity = 0.0
             
             # Record evaluation metrics to CSV
             with open(self.eval_csv_path, 'a') as f:
-                f.write(f'{timestamp},{self.rollout_count},{eval_transmission},{eval_balance},{eval_score},{eval_reward},{eval_similarity}\n')
+                f.write(f'{timestamp},{self.rollout_count},{eval_transmission_score},{eval_balance_score},{eval_score},{eval_reward},{eval_similarity_score}\n')
             
             # Also add to train_csv with 'eval' type for combined plotting
             with open(self.train_csv_path, 'a') as f:
-                f.write(f'{timestamp},{self.rollout_count},eval,{eval_transmission},{eval_balance},{eval_score},{eval_reward},{eval_similarity}\n')
+                f.write(f'{timestamp},{self.rollout_count},eval,{eval_transmission_score},{eval_balance_score},{eval_score},{eval_reward},{eval_similarity_score}\n')
             
             # Print evaluation metrics
             print(f"[Eval]  Rollout {self.rollout_count} (deterministic): "
-                  f"Trans={eval_transmission:.4f}, Bal={eval_balance:.4f}, "
+                  f"Trans={eval_transmission_score:.4f}, Bal={eval_balance_score:.4f}, "
                   f"Score={eval_score:.4f}, Reward={eval_reward:.4f}")
             
             # Check if this is the best evaluation score

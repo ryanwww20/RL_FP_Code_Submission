@@ -45,7 +45,7 @@ training:
   ppo:
     total_timesteps: 192000
     # total_timesteps: 640
-    n_envs: 16
+    n_envs: 1
     learning_rate: 0.001
     n_steps: 80
     batch_size: 64
