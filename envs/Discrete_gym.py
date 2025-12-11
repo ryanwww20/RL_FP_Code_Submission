@@ -3,32 +3,52 @@ Minimal OpenAI Gymnasium Environment Template
 """
 
 import gymnasium as gym
+import time
 from gymnasium import spaces
 import numpy as np
 from envs.meep_simulation import WaveguideSimulation
 from config import config
+
+
 class MinimalEnv(gym.Env):
 
     metadata = {"render_modes": ["human", "rgb_array"], "render_fps": 4}
 
-    def __init__(self, render_mode=None):
+    def __init__(self, render_mode=None, use_cnn=True):
         """
         Initialize the environment.
 
         Args:
             render_mode: "human" for GUI, "rgb_array" for image, None for no rendering
+            use_cnn: True -> new CNN-style observation (matrix flatten + monitors + idx + prev layer);
+                     False -> legacy dense observation (monitors + idx + prev layer)
         """
         super().__init__()
 
-        self.obs_size = config.environment.obs_size
+        self.use_cnn = use_cnn
         self.action_size = config.environment.action_size
+        self.pixel_num_x = config.simulation.pixel_num_x
+        self.pixel_num_y = config.simulation.pixel_num_y
         
         # Validate that max_steps doesn't exceed material matrix size
-        assert config.environment.max_steps <= config.simulation.pixel_num_x, \
-            f"max_steps ({config.environment.max_steps}) must be <= pixel_num_x ({config.simulation.pixel_num_x})"
+        assert config.environment.max_steps <= self.pixel_num_x, \
+            f"max_steps ({config.environment.max_steps}) must be <= pixel_num_x ({self.pixel_num_x})"
+        
+        # Observation
+        num_monitors = config.simulation.num_flux_regions  # 10 monitors
+        if self.use_cnn:
+            # Flattened matrix + monitors + idx + previous layer
+            self.obs_size = (
+                self.pixel_num_x * self.pixel_num_y  # design matrix
+                + num_monitors                       # monitor readings
+                + 1                                  # layer index
+                + self.pixel_num_y                   # previous layer
+            )
+        else:
+            # Legacy dense obs (monitors + idx + previous layer), match old_discrete_gym
+            self.obs_size = config.environment.obs_size
         
         # Define observation and action spaces
-        # State is an array of 100
         self.observation_space = spaces.Box(
             low=-np.inf,
             high=np.inf,
@@ -36,7 +56,7 @@ class MinimalEnv(gym.Env):
             dtype=np.float32
         )
 
-        # Action space: binary array of length 50 (0/1 values)
+        # Action space: binary array of length 20 (0/1 values)
         self.action_space = spaces.MultiBinary(self.action_size)
 
         # Initialize state
@@ -56,12 +76,17 @@ class MinimalEnv(gym.Env):
         # Store previous layers for state space (history of layer matrices)
         self.num_previous_layers = config.environment.num_previous_layers
         self.layer_history = []  # List to store previous layer matrices
-        self.pixel_num_x = config.simulation.pixel_num_x
-        self.pixel_num_y = config.simulation.pixel_num_y
         self.waveguide_width = config.simulation.waveguide_width
         self.design_region_y_min = config.simulation.design_region_y_min
         self.design_region_y_max = config.simulation.design_region_y_max
         self.pixel_size = config.simulation.pixel_size
+
+        # Timing statistics
+        self.step_count = 0
+        self.log_interval = 100  # Print timing every 100 steps
+        self.total_step_time = 0.0
+        self.total_sim_time = 0.0
+        self.total_other_time = 0.0
 
     def _get_default_waveguide_layer(self):
         """
@@ -100,34 +125,31 @@ class MinimalEnv(gym.Env):
         Returns:
             1D array of length pixel_num_y (20 values: the previous layer)
         """
-        # Get the previous layer
-        # For first layer (material_matrix_idx == 0), use input waveguide pattern
-        # For subsequent layers, get from material_matrix
         if self.material_matrix_idx == 0:
-            # First layer: use input waveguide pattern as previous layer
-            previous_layer = self._get_default_waveguide_layer()
-        else:
-            # Get the previous layer from material_matrix
-            # material_matrix_idx has been incremented, so previous is at idx - 1
-            previous_layer = self.material_matrix[self.material_matrix_idx - 1].copy()
-        
-        return previous_layer.astype(np.float32)
+            return self._get_default_waveguide_layer()
+        return self.material_matrix[self.material_matrix_idx - 1].copy().astype(np.float32)
 
     def _get_previous_layer(self):
         """
-        Get the previous layer (the layer before the current one).
-        For the first layer (material_matrix_idx == 0), returns the input waveguide pattern.
-        
-        Returns:
-            1D array of length pixel_num_y (20 values) with 1=silicon, 0=silica
+        Return the physical previous layer.
         """
-        if self.material_matrix_idx == 0:
-            # First layer: use input waveguide pattern as previous layer
-            return self._get_default_waveguide_layer()
-        else:
-            # Get the previous layer from material_matrix
-            # material_matrix_idx has been incremented, so previous is at idx - 1
-            return self.material_matrix[self.material_matrix_idx - 1].copy()
+        return self._get_previous_layers_state()
+
+    def _build_observation(self, hzfield_state_normalized: np.ndarray) -> np.ndarray:
+        """
+        Build observation.
+        - use_cnn=True : [flattened matrix | monitors | index | previous_layer]
+        - use_cnn=False: [monitors | index | previous_layer] (legacy dense)
+        """
+        monitors = hzfield_state_normalized.astype(np.float32)
+        idx_arr = np.array([float(self.material_matrix_idx)], dtype=np.float32)
+        previous_layer = self._get_previous_layers_state()
+
+        if self.use_cnn:
+            matrix_flat = self.material_matrix.flatten().astype(np.float32)
+            return np.concatenate([matrix_flat, monitors, idx_arr, previous_layer])
+
+        return np.concatenate([monitors, idx_arr, previous_layer]).astype(np.float32)
 
     def _calculate_similarity(self, current_layer, previous_layer):
         """
@@ -179,11 +201,7 @@ class MinimalEnv(gym.Env):
         else:
             hzfield_state_normalized = hzfield_state  # If all zeros, keep as is
         
-        # Build observation: 10 monitors + matrix index + previous layer
-        observation = hzfield_state_normalized.copy().astype(np.float32)  # 10 monitor values (normalized)
-        observation = np.append(observation, float(self.material_matrix_idx))  # 1 matrix index
-        previous_layer = self._get_previous_layers_state()  # 20 values (previous layer)
-        observation = np.append(observation, previous_layer)
+        observation = self._build_observation(hzfield_state_normalized)
         
         info = {}
 
@@ -205,11 +223,13 @@ class MinimalEnv(gym.Env):
             truncated: Whether episode was truncated (time limit)
             info: Additional information dictionary
         """
+        t0 = time.time()
+
         # Validate action
         assert self.action_space.contains(action), f"Invalid action: {action}"
 
         # Action is a binary array representing one layer (row) of the design
-        # Get previous layer before updating (for similarity calculation)
+        # Get previous layer before updating (for metrics/logging, similarity reward removed)
         previous_layer = self._get_previous_layer()
         
         # Update the material matrix: set the row at material_matrix_idx
@@ -223,12 +243,16 @@ class MinimalEnv(gym.Env):
         
         self.material_matrix_idx += 1
 
+        t_sim_start = time.time()
+        
         # calculate_flux returns: input_mode_flux, output_mode_flux_1, output_mode_flux_2, hzfield_state, hz_data, input_mode, output_mode_1, output_mode_2
         hzfield_state, hz_data= self.simulation.calculate_flux(
             self.material_matrix)
 
+        t_sim_end = time.time()
+        
         # Use MODE coefficients for reward calculation (instead of raw flux)
-        # Pass current layer and previous layer for similarity calculation
+        # Pass current layer and previous layer for metrics/logging (similarity reward removed)
         current_score, reward = self.get_reward(current_layer=action, previous_layer=previous_layer)
        
         terminated = self.material_matrix_idx >= self.max_steps  # Goal reached
@@ -241,7 +265,7 @@ class MinimalEnv(gym.Env):
                 'hz_data': hz_data.copy(),
                 'hzfield_state': hzfield_state.copy(),
                 'total_transmission': self._step_metrics['total_transmission'],
-                'transmission_score': self._step_metrics['transmission_score'],
+                'transmission_score': self._step_metrics.get('transmission_score', 0.0),  # Ensure this is included
                 'transmission_1': self._step_metrics['transmission_1'],
                 'transmission_2': self._step_metrics['transmission_2'],
                 'balance_score': self._step_metrics['balance_score'],
@@ -249,27 +273,45 @@ class MinimalEnv(gym.Env):
                 'similarity_score': self._step_metrics.get('similarity_score', 0.0),
             }
 
-        # Get observation - return the current hzfield_state as observation
-        # This gives the agent feedback about the current state
         if self.material_matrix_idx > 0:
-            # Normalize hzfield_state by dividing by maximum (bounded between 0 and 1)
             hzfield_max = np.max(hzfield_state)
             if hzfield_max > 0:
                 hzfield_state_normalized = hzfield_state / hzfield_max
             else:
-                hzfield_state_normalized = hzfield_state  # If all zeros, keep as is
-            
-            # Build observation: 10 monitors + matrix index + previous layer
-            observation = hzfield_state_normalized.copy().astype(np.float32)  # 10 monitor values (normalized)
-            observation = np.append(observation, float(self.material_matrix_idx))  # 1 matrix index
-            previous_layer = self._get_previous_layers_state()  # 20 values (previous layer)
-            observation = np.append(observation, previous_layer)
+                hzfield_state_normalized = hzfield_state
+            observation = self._build_observation(hzfield_state_normalized)
         else:
-            # Initial state: return zeros (shouldn't happen after reset, but just in case)
             observation = np.zeros(self.obs_size, dtype=np.float32)
 
         # Info dictionary with custom metrics
         info = self._step_metrics if hasattr(self, '_step_metrics') else {}
+
+        # Timing analysis
+        t_final = time.time()
+        
+        # Accumulate times
+        step_time = t_final - t0
+        sim_time = t_sim_end - t_sim_start
+        other_time = step_time - sim_time
+        
+        self.total_step_time += step_time
+        self.total_sim_time += sim_time
+        self.total_other_time += other_time
+        self.step_count += 1
+        
+        # Print stats every log_interval steps
+        if self.step_count % self.log_interval == 0:
+            avg_step = self.total_step_time / self.log_interval
+            avg_sim = self.total_sim_time / self.log_interval
+            avg_other = self.total_other_time / self.log_interval
+            sim_ratio = avg_sim / avg_step if avg_step > 0 else 0
+            
+            print(f"[Stats {self.step_count} steps] Avg Step: {avg_step:.4f}s | Sim: {avg_sim:.4f}s ({sim_ratio*100:.1f}%) | Other: {avg_other:.4f}s")
+            
+            # Reset counters
+            self.total_step_time = 0.0
+            self.total_sim_time = 0.0
+            self.total_other_time = 0.0
 
         return observation, reward, terminated, truncated, info
 
@@ -279,8 +321,8 @@ class MinimalEnv(gym.Env):
         Uses get_output_transmission() method directly.
         
         Args:
-            current_layer: Current layer (1D array) for similarity calculation
-            previous_layer: Previous layer (1D array) for similarity calculation
+            current_layer: Current layer (1D array) for metrics/logging (similarity reward removed)
+            previous_layer: Previous layer (1D array) for metrics/logging (similarity reward removed)
         """
         # Get transmission using the method from meep_simulation
         _, input_mode = self.simulation.get_flux_input_mode(band_num=1)
@@ -296,6 +338,7 @@ class MinimalEnv(gym.Env):
         balance_score = max(1 - diff_ratio, 0)
 
         # Calculate similarity: number of identical pixels between current and previous layer
+        # NOTE: Similarity is calculated for logging/metrics only, NOT added to reward (too artificial)
         if current_layer is not None and previous_layer is not None:
             similarity = self._calculate_similarity(current_layer, previous_layer)
             # Normalize similarity to [0, 1] by dividing by pixel_num_y
@@ -308,8 +351,8 @@ class MinimalEnv(gym.Env):
         # transmission_score = (total_transmission/input_mode) normalized to [0,1] with min/max clamping
         current_score = transmission_score * 10 + balance_score * 10
         reward = current_score - self.last_score if self.last_score is not None else 0
-        # Add similarity_score directly to reward (not to current_score)
-        reward += similarity_score/10
+        # Similarity reward removed - too artificial, let agent learn naturally
+        # reward += similarity_score/10
 
         self.last_score = current_score
 
@@ -352,18 +395,16 @@ class MinimalEnv(gym.Env):
             diff_ratio = 1.0
         balance_score = max(1 - diff_ratio, 0)
         
-        # Keep transmission_score as-is (without dividing by input_mode) for logging
-        transmission_score = min(max(total_transmission, 0), 1)
         # Use same formula as get_reward() for consistency
-        # Calculate normalized transmission score for current_score (matching get_reward)
-        normalized_transmission = min(max(total_transmission / input_mode, 0), 1)
-        current_score = normalized_transmission * 10 + balance_score * 10
+        # Calculate normalized transmission score (matching get_reward)
+        transmission_score = min(max(total_transmission / input_mode, 0), 1)
+        current_score = transmission_score * 10 + balance_score * 10
         
         return {
             'material_matrix': self.material_matrix.copy(),
             'hzfield_state': hzfield_state,
             'total_transmission': total_transmission,
-            'transmission_score': transmission_score,
+            'transmission_score': transmission_score,  # Use normalized score for consistency
             'diff_transmission': diff_transmission,
             'transmission_1': transmission_1,
             'transmission_2': transmission_2,
