@@ -126,6 +126,9 @@ class TrainingCallback(BaseCallback):
 
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         
+        # Get n_steps from model (available in A2C)
+        n_steps = getattr(self.model, 'n_steps', None)
+        
         # ============================================================
         # 1. TRAINING METRICS: Get metrics from all parallel training envs
         # ============================================================
@@ -147,10 +150,15 @@ class TrainingCallback(BaseCallback):
             train_similarity = sum(m.get('similarity_score', 0.0) for m in all_metrics) / n_envs
             
             # Get episode reward from rollout buffer
+            # Since episode length is fixed at 20 and n_steps is a multiple of 20,
+            # each rollout contains (n_steps / 20) complete episodes per environment
             train_reward = 0.0
             if hasattr(self.model, 'rollout_buffer') and self.model.rollout_buffer is not None:
-                rewards = self.model.rollout_buffer.rewards
-                episode_rewards = np.sum(rewards, axis=0)
+                rewards = self.model.rollout_buffer.rewards  # Shape: (n_steps, n_envs)
+                rollout_rewards = np.sum(rewards, axis=0)  # Sum over steps for each env: (n_envs,)
+                # Each rollout contains (n_steps / 20) episodes, so divide to get average episode reward
+                episodes_per_rollout = n_steps / 20
+                episode_rewards = rollout_rewards / episodes_per_rollout  # Average episode reward per env
                 train_reward = float(np.mean(episode_rewards))
                 
         except Exception as e:
@@ -167,7 +175,7 @@ class TrainingCallback(BaseCallback):
             f.write(f'{timestamp},{self.rollout_count},train,{train_transmission_score},{train_balance_score},{train_score},{train_reward},{train_similarity}\n')
         
         # Print training metrics
-        print(f"\n[Train] Rollout {self.rollout_count} (avg of {n_envs} envs): "
+        print(f"\n[Train] Rollout {self.rollout_count} (avg of {n_envs} envs, n_steps={n_steps}): "
               f"Trans={train_transmission_score:.4f}, Bal={train_balance_score:.4f}, "
               f"Score={train_score:.4f}, Reward={train_reward:.4f}")
         print(f"        Rollout Duration: {rollout_duration:.2f}s")
