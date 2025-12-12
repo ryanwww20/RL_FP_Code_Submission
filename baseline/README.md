@@ -37,7 +37,7 @@ power_splitter/
 Ensure you have the required dependencies:
 
 ```bash
-pip install ./RL_FinalProject-goos
+pip install ./baseline
 # Install spins package (see main project README)
 ```
 
