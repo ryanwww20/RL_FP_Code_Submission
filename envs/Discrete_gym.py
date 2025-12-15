@@ -87,6 +87,11 @@ class MinimalEnv(gym.Env):
         self.total_step_time = 0.0
         self.total_sim_time = 0.0
         self.total_other_time = 0.0
+        
+        # Fixed input_mode from first rollout average
+        self.fixed_input_mode = None
+        self.first_rollout_input_modes = []  # Collect input_mode values during first rollout
+        self.is_first_rollout = True  # Track if we're in the first rollout
 
     def _get_default_waveguide_layer(self):
         """
@@ -187,6 +192,11 @@ class MinimalEnv(gym.Env):
         self.material_matrix_idx = 0
         self.layer_history = []  # Reset layer history
         self.last_score = None
+        
+        # Reset first rollout tracking (but keep fixed_input_mode once it's set)
+        if self.fixed_input_mode is None:
+            self.first_rollout_input_modes = []
+            self.is_first_rollout = True
 
         # Use calculate_flux to get initial hzfield_state for empty matrix
         # This returns: input_mode_flux, output_mode_flux_1, output_mode_flux_2, hzfield_state, hz_data, input_mode, output_mode_1, output_mode_2
@@ -254,6 +264,12 @@ class MinimalEnv(gym.Env):
        
         terminated = self.material_matrix_idx >= self.max_steps  # Goal reached
         truncated = False   # Time limit exceeded
+        
+        # Calculate and store fixed input_mode at end of first rollout
+        if terminated and self.is_first_rollout and self.fixed_input_mode is None and len(self.first_rollout_input_modes) > 0:
+            self.fixed_input_mode = np.mean(self.first_rollout_input_modes)
+            self.is_first_rollout = False
+            print(f"Fixed input_mode set to {self.fixed_input_mode:.6f} (average of {len(self.first_rollout_input_modes)} values from first rollout)")
         
         # Save final metrics when episode ends (before reset happens)
         if terminated:
@@ -323,9 +339,19 @@ class MinimalEnv(gym.Env):
             previous_layer: Previous layer (1D array) for metrics/logging (similarity reward removed)
         """
         # Get transmission using the method from meep_simulation
-        _, input_mode = self.simulation.get_flux_input_mode(band_num=1)
-        transmission_1, transmission_2, total_transmission, diff_transmission = self.simulation.get_output_transmission(band_num=1)
+        # Only call get_flux_input_mode during first rollout (it's time-consuming)
+        if self.fixed_input_mode is None:
+            # Still collecting values for first rollout
+            _, current_input_mode = self.simulation.get_flux_input_mode(band_num=1)
+            if self.is_first_rollout:
+                self.first_rollout_input_modes.append(current_input_mode)
+            input_mode = current_input_mode
+        else:
+            # Use fixed input_mode (skip expensive call)
+            input_mode = self.fixed_input_mode
         
+        transmission_1, transmission_2, total_transmission, diff_transmission = self.simulation.get_output_transmission(band_num=1)
+        diff_transmission = abs(transmission_1/0.7 - transmission_2/0.3)
         transmission_score = min(max(total_transmission/input_mode, 0), 1)
 
         # Calculate balance score (how evenly distributed between outputs)
@@ -381,11 +407,19 @@ class MinimalEnv(gym.Env):
             return self.last_episode_metrics
         
         # Fallback: return current state (for first rollout before any episode completes)
-        _, input_mode = self.simulation.get_flux_input_mode(band_num=1)
+        # Only call get_flux_input_mode during first rollout (it's time-consuming)
+        if self.fixed_input_mode is None:
+            _, current_input_mode = self.simulation.get_flux_input_mode(band_num=1)
+            input_mode = current_input_mode
+        else:
+            # Use fixed input_mode (skip expensive call)
+            input_mode = self.fixed_input_mode
+        
         hzfield_state, _ = self.simulation.calculate_flux(self.material_matrix)
         
         transmission_1, transmission_2, total_transmission, diff_transmission = \
             self.simulation.get_output_transmission(band_num=1)
+        diff_transmission = abs(transmission_1/0.7 - transmission_2/0.3)
         
         if total_transmission > 0:
             diff_ratio = diff_transmission / total_transmission
