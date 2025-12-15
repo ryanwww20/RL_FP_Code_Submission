@@ -95,7 +95,7 @@ class ModelEvaluator:
                 "total_transmission",
                 "transmission_1",
                 "transmission_2",
-                "diff_transmission",
+                "actual_ratio",
                 "similarity_score"
             ]
             

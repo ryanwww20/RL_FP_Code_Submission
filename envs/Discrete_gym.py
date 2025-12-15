@@ -332,16 +332,17 @@ class MinimalEnv(gym.Env):
         """
         # Get transmission using the method from meep_simulation
         # Use fixed input_mode (calculated at initialization with all-silicon matrix)
-        transmission_1, transmission_2, total_transmission, diff_transmission = self.simulation.get_output_transmission(band_num=1)
-        diff_transmission = abs(transmission_1/0.7 - transmission_2/0.3)
+        transmission_1, transmission_2, total_transmission, _ = self.simulation.get_output_transmission(band_num=1)
         transmission_score = total_transmission / self.fixed_input_mode
 
-        # Calculate balance score (how evenly distributed between outputs)
+        # Calculate balance score based on how close to 70/30 split
         if total_transmission > 0:
-            diff_ratio = diff_transmission / total_transmission
+            actual_ratio = transmission_1 / total_transmission  # Actual % to output 1
+            target_ratio = 0.7  # Target is 70% to output 1
+            # balance_score = 1 when perfect, 0 when completely off
+            balance_score = max(1 - abs(actual_ratio - target_ratio) / 0.7, 0)
         else:
-            diff_ratio = 1.0  # If no transmission, balance is worst
-        balance_score = max(1 - diff_ratio, 0)
+            balance_score = 0
 
         # Calculate similarity: number of identical pixels between current and previous layer
         # NOTE: Similarity is calculated for logging/metrics only, NOT added to reward (too artificial)
@@ -365,7 +366,7 @@ class MinimalEnv(gym.Env):
         # Store metrics for info dict
         self._step_metrics = {
             "total_transmission": total_transmission,
-            "diff_transmission": diff_transmission,
+            "actual_ratio": actual_ratio if total_transmission > 0 else 0.0,  # Actual % to output 1
             "transmission_1": transmission_1,
             "transmission_2": transmission_2,
             "transmission_score": transmission_score,
@@ -392,15 +393,16 @@ class MinimalEnv(gym.Env):
         # Use fixed input_mode (calculated at initialization with all-silicon matrix)
         hzfield_state, _ = self.simulation.calculate_flux(self.material_matrix)
         
-        transmission_1, transmission_2, total_transmission, diff_transmission = \
+        transmission_1, transmission_2, total_transmission, _ = \
             self.simulation.get_output_transmission(band_num=1)
-        diff_transmission = abs(transmission_1/0.7 - transmission_2/0.3)
         
+        # Calculate balance score based on how close to 70/30 split
         if total_transmission > 0:
-            diff_ratio = diff_transmission / total_transmission
+            actual_ratio = transmission_1 / total_transmission  # Actual % to output 1
+            target_ratio = 0.7  # Target is 70% to output 1
+            balance_score = max(1 - abs(actual_ratio - target_ratio) / 0.7, 0)
         else:
-            diff_ratio = 1.0
-        balance_score = max(1 - diff_ratio, 0)
+            balance_score = 0
         
         # Use same formula as get_reward() for consistency (no clipping)
         transmission_score = total_transmission / self.fixed_input_mode
@@ -411,7 +413,7 @@ class MinimalEnv(gym.Env):
             'hzfield_state': hzfield_state,
             'total_transmission': total_transmission,
             'transmission_score': transmission_score,  # Use normalized score for consistency
-            'diff_transmission': diff_transmission,
+            'actual_ratio': actual_ratio if total_transmission > 0 else 0.0,  # Actual % to output 1
             'transmission_1': transmission_1,
             'transmission_2': transmission_2,
             'balance_score': balance_score,
