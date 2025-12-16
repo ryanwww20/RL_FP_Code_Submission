@@ -1,6 +1,7 @@
 import dataclasses
 import yaml
 from dataclasses import dataclass
+from typing import Optional
 import meep as mp
 
 @dataclass
@@ -32,6 +33,9 @@ class SimulationConfig:
     output_coupler_length: float
     input_flux_monitor_x: float
     output_flux_monitor_x: float
+    plot_design_ylim: Optional[list] = None
+    plot_distribution_ylim: Optional[list] = None
+    plot_full_distribution_ylim: Optional[list] = None
 @dataclass
 class EnvironmentConfig:
     obs_size: int

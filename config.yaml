@@ -39,6 +39,10 @@ simulation:
   output_coupler_length: 1.5
   input_flux_monitor_x: -1.5
   output_flux_monitor_x: 2
+  # Fixed y-axis range for plotting (set to null/empty to use auto scaling)
+  plot_design_ylim: [0, 25]  # e.g., [0, 1.0] to fix y-axis range for design plot
+  plot_distribution_ylim: [0, 70000]  # e.g., [0, 1.0] to fix y-axis range for distribution plot
+  plot_full_distribution_ylim: [0, 70000]  # e.g., [0, 2.0] to fix y-axis range for full distribution plot
 
 
 training:

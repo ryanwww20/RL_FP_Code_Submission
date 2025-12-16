@@ -95,6 +95,11 @@ class WaveguideSimulation:
         self.src_pos_shift_coeff = config.simulation.src_pos_shift_coeff
         self.input_flux_monitor_x = config.simulation.input_flux_monitor_x
         self.output_flux_monitor_x = config.simulation.output_flux_monitor_x
+        
+        # Fixed y-axis ranges for plotting (None means auto-scaling)
+        self.plot_design_ylim = config.simulation.plot_design_ylim
+        self.plot_distribution_ylim = config.simulation.plot_distribution_ylim
+        self.plot_full_distribution_ylim = config.simulation.plot_full_distribution_ylim
 
     def create_geometry(self, matrix=None):
         """
@@ -795,9 +800,15 @@ class WaveguideSimulation:
             # Transpose ez_data because imshow expects (rows, cols) where rows=y, cols=x
             # Meep's get_array gives (x, y), so transpose for correct orientation
             field_magnitude = np.abs(hz_data)
-            plt.imshow(field_magnitude, interpolation='spline36', cmap='viridis',
-                    aspect='auto', extent=extent, origin='lower')
-            plt.colorbar(label='Hz (electric field)')
+            
+            # Set fixed colorbar range if configured
+            vmin, vmax = None, None
+            if self.plot_design_ylim is not None and len(self.plot_design_ylim) == 2:
+                vmin, vmax = self.plot_design_ylim[0], self.plot_design_ylim[1]
+            
+            im = plt.imshow(field_magnitude, interpolation='spline36', cmap='viridis',
+                    aspect='auto', extent=extent, origin='lower', vmin=vmin, vmax=vmax)
+            plt.colorbar(im, label='Hz (electric field)')
             plt.xlabel('x (microns)')
             plt.ylabel('y (microns)')
             plt.grid(False)
@@ -969,6 +980,10 @@ class WaveguideSimulation:
             plt.xlabel(x_label)
             plt.ylabel('|Hz|²')
             
+            # Set fixed y-axis range if configured
+            if self.plot_distribution_ylim is not None:
+                plt.ylim(self.plot_distribution_ylim)
+            
             # Build title
             base_title = 'Magnetic Field Distribution at Output Plane'
             if title_suffix:
@@ -1010,7 +1025,6 @@ class WaveguideSimulation:
         if hzfield_full_distribution is None:
             hzfield_full_distribution = self.get_hzfield_full_distribution()
         # Use y-coordinates as x-axis if available
-        # print("hzfield_full_distribution length: ", len(hzfield_full_distribution))
         if len(self.hzfield_full_distribution_region_y_positions) == len(hzfield_full_distribution):
             x_data = self.hzfield_full_distribution_region_y_positions
             x_label = 'Y Position (μm)'
@@ -1026,6 +1040,10 @@ class WaveguideSimulation:
             plt.plot(x_data, hzfield_full_distribution, color="#4C72B0", alpha=0.7, label='Magnetic Field |Hz|²')
             plt.xlabel(x_label)
             plt.ylabel('|Hz|²')
+            
+            # Set fixed y-axis range if configured
+            if self.plot_full_distribution_ylim is not None:
+                plt.ylim(self.plot_full_distribution_ylim)
             
             # Build title
             base_title = 'Magnetic Field Full Distribution at Output Plane'
