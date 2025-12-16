@@ -404,9 +404,29 @@ class TrainingCallback(BaseCallback):
     def _create_gif(self, image_paths, output_path, duration=500, loop=0):
         """Create a GIF from a list of image paths."""
         images = []
+        base_size = None
+        
         for path in image_paths:
             if os.path.exists(path):
                 img = Image.open(path)
+                
+                # Convert RGBA to RGB if necessary (GIF doesn't support transparency well)
+                if img.mode == 'RGBA':
+                    # Create a white background
+                    rgb_img = Image.new('RGB', img.size, (255, 255, 255))
+                    rgb_img.paste(img, mask=img.split()[3])  # Use alpha channel as mask
+                    img = rgb_img
+                elif img.mode != 'RGB':
+                    img = img.convert('RGB')
+                
+                # Store the first image's size as reference
+                if base_size is None:
+                    base_size = img.size
+                
+                # Resize all images to match the first one (in case of inconsistencies)
+                if img.size != base_size:
+                    img = img.resize(base_size, Image.Resampling.LANCZOS)
+                
                 images.append(img)
         
         if images:
@@ -415,9 +435,10 @@ class TrainingCallback(BaseCallback):
                 save_all=True,
                 append_images=images[1:],
                 duration=duration,
-                loop=loop
+                loop=loop,
+                optimize=False  # Disable optimization to preserve quality
             )
-            print(f"GIF created: {output_path} ({len(images)} frames)")
+            print(f"GIF created: {output_path} ({len(images)} frames, size: {base_size})")
         else:
             print(f"Warning: No images found to create GIF at {output_path}")
 
