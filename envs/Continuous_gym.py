@@ -131,22 +131,6 @@ class MinimalEnv(gym.Env):
             # material_matrix_idx has been incremented, so previous is at idx - 1
             return self.material_matrix[self.material_matrix_idx - 1].copy()
 
-    def _calculate_similarity(self, current_layer, previous_layer):
-        """
-        Calculate similarity between current and previous layer.
-        Similarity is the number of identical pixels (both 0 or both 1).
-        
-        Args:
-            current_layer: 1D array of current layer (length pixel_num_y)
-            previous_layer: 1D array of previous layer (length pixel_num_y)
-        
-        Returns:
-            similarity: Number of identical pixels (0 to pixel_num_y)
-        """
-        # Count pixels where current_layer == previous_layer
-        similarity = np.sum(current_layer == previous_layer)
-        return float(similarity)
-
     def reset(self, seed=None, options=None):
         """
         Reset the environment to initial state.
@@ -212,7 +196,7 @@ class MinimalEnv(gym.Env):
         assert self.action_space.contains(action), f"Invalid action: {action}"
 
         # Action is a binary array representing one layer (row) of the design
-        # Get previous layer before updating (for similarity calculation)
+        # Get previous layer before updating (for metrics/logging)
         previous_layer = self._get_previous_layer()
         
         # Update the material matrix: set the row at material_matrix_idx
@@ -235,7 +219,7 @@ class MinimalEnv(gym.Env):
             self.material_matrix)
 
         # Use MODE coefficients for reward calculation (instead of raw flux)
-        # Pass current layer and previous layer for similarity calculation
+        # Pass current layer and previous layer for metrics/logging
         current_score, reward = self.get_reward(current_layer=action, previous_layer=previous_layer)
         
         # Accumulate episode reward
@@ -255,7 +239,6 @@ class MinimalEnv(gym.Env):
                 'transmission_2': self._step_metrics['transmission_2'],
                 'balance_score': self._step_metrics['balance_score'],
                 'current_score': self._step_metrics['current_score'],
-                'similarity_score': self._step_metrics.get('similarity_score', 0.0),
                 'total_reward': self.episode_reward,  # Add total episode reward
             }
 
@@ -289,8 +272,8 @@ class MinimalEnv(gym.Env):
         Uses get_output_transmission() method directly.
         
         Args:
-            current_layer: Current layer (1D array) for similarity calculation
-            previous_layer: Previous layer (1D array) for similarity calculation
+            current_layer: Current layer (1D array) for metrics/logging
+            previous_layer: Previous layer (1D array) for metrics/logging
         """
         # Get transmission using the method from meep_simulation
         _, input_mode = self.simulation.get_flux_input_mode(band_num=1)
@@ -305,21 +288,10 @@ class MinimalEnv(gym.Env):
             diff_ratio = 1.0  # If no transmission, balance is worst
         balance_score = max(1 - diff_ratio, 0)
 
-        # Calculate similarity: number of identical pixels between current and previous layer
-        if current_layer is not None and previous_layer is not None:
-            similarity = self._calculate_similarity(current_layer, previous_layer)
-            # Normalize similarity to [0, 1] by dividing by pixel_num_y
-            similarity_score = similarity / self.pixel_num_y
-        else:
-            similarity = 0.0
-            similarity_score = 0.0
-
         # Calculate current_score: use transmission_score which is already normalized to [0,1]
         # transmission_score = (total_transmission/input_mode) normalized to [0,1] with min/max clamping
         current_score = transmission_score * 10 + balance_score * 10
         reward = current_score - self.last_score if self.last_score is not None else 0
-        # Add similarity_score directly to reward (not to current_score)
-        reward += similarity_score/10
 
         self.last_score = current_score
 
@@ -331,8 +303,6 @@ class MinimalEnv(gym.Env):
             "transmission_2": transmission_2,
             "transmission_score": transmission_score,
             "balance_score": balance_score,
-            "similarity": similarity,
-            "similarity_score": similarity_score,
             "current_score": current_score,
         }
 
@@ -380,7 +350,6 @@ class MinimalEnv(gym.Env):
             'transmission_2': transmission_2,
             'balance_score': balance_score,
             'current_score': current_score,
-            'similarity_score': 0.0,  # Fallback: similarity not available in get_current_metrics
         }
 
     def save_design_plot(self, save_path, title_suffix=None):
