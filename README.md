@@ -92,6 +92,40 @@ You can customize the following parameters in `config.yaml`:
 - `training.ppo.learning_rate`: Learning rate for PPO training
 - `simulation.simulation_time`: Simulation time parameter
 
+### Training Results
+
+Training results are saved in `ppo_model_log_{timestamp}/` directory (e.g., `ppo_model_log_20251223_123456/`):
+
+```
+ppo_model_log_{timestamp}/
+├── img/                          # Image outputs
+│   ├── design.gif                # GIF showing design evolution over training
+│   ├── flux.gif                   # GIF showing flux distribution evolution
+│   ├── best_design.png            # Best design found during training
+│   └── best_distribution.png      # Best flux distribution found
+│
+├── plot/                          # Training metric plots
+│   ├── transmission.png           # Transmission score over rollouts
+│   ├── balance.png                # Balance score over rollouts
+│   ├── score.png                  # Overall score over rollouts
+│   └── reward.png                 # Reward over rollouts
+│
+├── design_images/                 # Temporary design images (used for GIF creation)
+│   └── design_rollout_XXXX.png    # Design at each rollout
+│
+├── distribution_images/           # Temporary distribution images (used for GIF creation)
+│   └── distribution_rollout_XXXX.png  # Flux distribution at each rollout
+│
+├── train_metrics.csv              # Training metrics (every rollout)
+│                                   # Columns: timestamp, rollout_count, type, transmission_score, balance_score, score, reward
+│
+└── eval_metrics.csv               # Evaluation metrics (every eval_freq rollouts)
+                                    # Columns: timestamp, rollout_count, transmission_score, balance_score, score, reward
+```
+
+**Note:** The best model checkpoint is saved separately in `models/ppo_model_{timestamp}_best.zip` when a new best evaluation score is achieved.
+
+
 ### Running Baseline
 
 The baseline consists of three steps. Make sure you're in the project root directory and have activated the conda environment:
