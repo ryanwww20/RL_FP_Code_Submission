@@ -4,7 +4,7 @@
 
 ```bash
 # 1. Create environment with Python
-conda create --name rl_waveguide python=3.9
+conda create --name rl_waveguide python=3.10
 
 # 2. Activate it
 conda activate rl_waveguide
@@ -66,7 +66,7 @@ The baseline consists of three steps:
 
 **Step 01: Optimize**
 ```bash
-python /storage/undergrad/b12901074/RL_FP_Code_Submission/baseline/power_splitter/src/core/power_splitter_cont_opt.py --max-iters 200 --target-ratio 0.7
+python /storage/undergrad/b12901074/RL_FP_Code_Submission/baseline/power_splitter/src/core/power_splitter_cont_opt.py run <output_file_folder> --max-iters 200 --target-ratio 0.7
 ```
 
 **Step 02: Discretization**
