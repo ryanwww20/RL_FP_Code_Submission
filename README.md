@@ -92,6 +92,32 @@ You can customize the following parameters in `config.yaml`:
 - `training.ppo.learning_rate`: Learning rate for PPO training
 - `simulation.simulation_time`: Simulation time parameter
 
+#### Loading and Continuing Training from a Checkpoint
+
+You can load a trained model and continue training or view results using `train_ppo.py` by setting the `load_model_path` in `config.yaml`:
+
+1. **Edit `config.yaml`** and set the model path:
+   ```yaml
+   training:
+     ppo:
+       load_model_path: "models/ppo_model_20251223_123456_best.zip"
+       total_timesteps: 2000000  # Continue training for this many timesteps
+   ```
+
+2. **Run the training script**:
+   ```bash
+   conda activate rl_waveguide
+   python train_ppo.py
+   ```
+
+**Note:** 
+- The script will automatically detect how many timesteps the model has already been trained
+- If the model has already been trained for more than `total_timesteps`, it will return without additional training
+- If `total_timesteps` > already trained timesteps, training will continue from the loaded model
+- Results will be saved in a new `ppo_model_log_{timestamp}/` directory (or resume from existing log directory)
+- The script will automatically resume from the previous rollout count and best evaluation score
+- For pure evaluation without training, use `eval.py` instead (see Model Evaluation section below)
+
 ### Training Results
 
 Training results are saved in `ppo_model_log_{timestamp}/` directory (e.g., `ppo_model_log_20251223_123456/`):
@@ -125,6 +151,57 @@ ppo_model_log_{timestamp}/
 
 **Note:** The best model checkpoint is saved separately in `models/ppo_model_{timestamp}_best.zip` when a new best evaluation score is achieved.
 
+### Model Evaluation
+
+Use `eval.py` to evaluate a trained model:
+
+```bash
+conda activate rl_waveguide
+python eval.py --model_path <path_to_model.zip> [options]
+```
+
+#### Required Arguments
+
+- `--model_path`: Path to the trained model `.zip` file (e.g., `models/ppo_model_20251223_123456_best.zip`)
+
+#### Optional Arguments
+
+- `--algo`: RL algorithm used (`ppo` or `sac`). Default: `ppo`
+- `--env_type`: Environment type (`continuous` or `discrete`). Default: `discrete`
+- `--n_episodes`: Number of evaluation episodes to run. Default: `1`
+- `--output_dir`: Directory to save evaluation results. Default: `eval_results`
+
+#### Examples
+
+**Basic evaluation:**
+```bash
+python eval.py --model_path model.zip
+```
+
+**Evaluate with multiple episodes:**
+```bash
+python eval.py --model_path model.zip --n_episodes 10
+```
+#### Evaluation Output
+
+Results are saved in `{output_dir}/{algo}_{model_name}/`:
+
+```
+eval_results/
+└── ppo_ppo_model_20251223_123456_best/
+    ├── evaluation_results.csv        # Detailed metrics for each episode
+    ├── evaluation_summary.csv        # Statistical summary (mean, std, min, max, etc.)
+    ├── design.png                     # Final design visualization
+    ├── distribution.png               # Final flux distribution visualization
+    ├── current_score.png              # Score per episode plot
+    ├── total_transmission.png         # Transmission per episode plot
+    ├── balance_score.png              # Balance score per episode plot
+    └── total_reward.png               # Total reward per episode plot
+```
+
+**CSV Columns:**
+- `evaluation_results.csv`: episode, total_reward, steps, timestamp, transmission_score, balance_score, current_score, etc.
+- `evaluation_summary.csv`: Statistical summary (count, mean, std, min, 25%, 50%, 75%, max) for all metrics
 
 ### Running Baseline
 
