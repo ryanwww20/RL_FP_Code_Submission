@@ -2,20 +2,46 @@
 
 ## Environments & Installation
 
+### Prerequisites
+- Conda (Miniconda or Anaconda)
+- Python 3.10
+
+### Installation Steps
+
 ```bash
-# 1. Create environment with Python
+# 1. Create conda environment with Python 3.10
 conda create --name rl_waveguide python=3.10
 
-# 2. Activate it
+# 2. Activate the environment
 conda activate rl_waveguide
 
-# 3. Install Meep Python bindings (pymeep) from conda-forge
-conda install -c conda-forge pymeep
+# 3. Install Meep (pymeep) from conda-forge
+conda install -c conda-forge pymeep -y
 
-# 4. Install other dependencies
-pip install -r requirements.txt
-pip install ./baseline
+# 4. Install Python dependencies using conda (recommended)
+conda install -c conda-forge numpy matplotlib pandas pyyaml gymnasium pytest tensorboard -y
+conda install -c conda-forge stable-baselines3 -y
+
+# Note: stable-baselines3 will automatically install pytorch as a dependency
+
+# 5. Install baseline package
+python -m pip install ./baseline
 ```
+
+### Alternative: Using pip (if conda installation fails)
+
+If you prefer to use pip, make sure you're in the conda environment and use `python -m pip`:
+
+```bash
+conda activate rl_waveguide
+python -m pip install -r requirements.txt
+python -m pip install ./baseline
+```
+
+**Important Notes:**
+- Always activate the conda environment before running scripts: `conda activate rl_waveguide`
+- Use `python -m pip` instead of `pip` to ensure you're using the conda environment's pip
+- Make sure `meep` is installed via conda-forge, as it has complex dependencies
 
 ## Code Structure
 
@@ -48,10 +74,16 @@ RL_FP_Code_Submission/
 
 ## Execution
 
+**Important:** Always activate the conda environment before running any scripts:
+```bash
+conda activate rl_waveguide
+```
+
 ### Training PPO Model
 
 Run the training script:
 ```bash
+conda activate rl_waveguide
 python train_ppo.py
 ```
 
@@ -62,19 +94,22 @@ You can customize the following parameters in `config.yaml`:
 
 ### Running Baseline
 
-The baseline consists of three steps:
+The baseline consists of three steps. Make sure you're in the project root directory and have activated the conda environment:
 
 **Step 01: Optimize**
 ```bash
-python /storage/undergrad/b12901074/RL_FP_Code_Submission/baseline/power_splitter/src/core/power_splitter_cont_opt.py run <output_file_folder> --max-iters 200 --target-ratio 0.7
+conda activate rl_waveguide
+python baseline/power_splitter/src/core/power_splitter_cont_opt.py run <output_file_folder> --max-iters 200 --target-ratio 0.7
 ```
 
 **Step 02: Discretization**
 ```bash
-python /storage/undergrad/b12901074/RL_FP_Code_Submission/baseline/power_splitter/src/tools/pickle_discretizer.py <path_to_pkl_file_generated_by_step_01>
+conda activate rl_waveguide
+python baseline/power_splitter/src/tools/pickle_discretizer.py <path_to_pkl_file_generated_by_step_01>
 ```
 
 **Step 03: FDFD Simulation**
 ```bash
-python /storage/undergrad/b12901074/RL_FP_Code_Submission/baseline/power_splitter/src/debug/quick_sim_test.py <path_to_pkl_file_generated_by_step_02>
+conda activate rl_waveguide
+python baseline/power_splitter/src/debug/quick_sim_test.py <path_to_pkl_file_generated_by_step_02>
 ```
